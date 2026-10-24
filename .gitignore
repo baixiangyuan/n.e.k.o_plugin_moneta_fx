@@ -4,6 +4,9 @@ __pycache__/
 *.egg-info/
 .venv/
 venv/
+.pytest_cache/
+.ruff_cache/
+uv.lock
 
 # 运行时数据（共享市场存档，含账户口令散列，不要提交）
 data/
@@ -31,6 +34,9 @@ build/
 # 日志
 *.log
 artifacts/
+
+# API 推送脚本记录的上一次远端 commit
+.api-push-parent
 
 # 本地依赖锁（云端部署用 Dockerfile 固定依赖）
 package-lock.json

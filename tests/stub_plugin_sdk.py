@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import sys
 import types
+from pathlib import Path
 from typing import Any, Callable
 
 
@@ -212,6 +213,13 @@ def install() -> None:
     """Register the stub as ``plugin.sdk.plugin`` for local testing."""
     if "plugin" in sys.modules:
         return
+    # 先把插件根目录放上 sys.path，这样本模块被 import 后，被测模块的
+    # 平铺导入（from engine import ...）也能解析。
+    here = Path(__file__).resolve()
+    for path in (str(here.parents[1]), str(here.parent)):
+        if path not in sys.path:
+            sys.path.insert(0, path)
+
     root = types.ModuleType("plugin")
     sdk = types.ModuleType("plugin.sdk")
     sdk_plugin = types.ModuleType("plugin.sdk.plugin")

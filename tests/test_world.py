@@ -8,7 +8,6 @@ import pytest
 
 from engine import TradeError
 from market import OFFLINE_SYMBOLS
-from store import World
 from world import MarketRuntime
 
 
@@ -281,10 +280,8 @@ def test_state_round_trips(runtime):
 
 
 def test_corrupt_state_is_rejected(runtime):
-    from store import World
-
     with pytest.raises(TradeError, match="存档"):
-        World.load({"version": 99})
+        type(runtime.world).load({"version": 99})
 
 
 def test_resume_backfills_charts_without_trading(runtime, player):

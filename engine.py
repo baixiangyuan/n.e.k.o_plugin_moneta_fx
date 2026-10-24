@@ -9,7 +9,7 @@ import math
 import random
 import time
 import uuid
-from typing import Any, Dict, Iterable, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 try:
     from .market import digits, is_valid_symbol, pip_size
