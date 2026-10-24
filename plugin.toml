@@ -1,0 +1,51 @@
+[plugin]
+id = "moneta_fx"
+name = "MONETA FX · 外汇模拟交易室"
+type = "plugin"
+description = "完整移植 MONETA FX 虚构外汇交易室：共享虚构市场、市价/限价/突破单、止损止盈、保证金与强平、隔夜费结算、K 线图与账户分析。行情控制台仅供插件管理员使用。"
+short_description = "MONETA FX fictional forex paper-trading room: shared market, orders, margin, chart and analytics."
+keywords = ["外汇", "交易", "MONETA", "forex", "trading", "模拟", "paper trading", "K线"]
+version = "1.0.0"
+entry = "plugin.plugins.moneta_fx:MonetaFxPlugin"
+
+[plugin.author]
+name = "MONETA FX port"
+
+[plugin.sdk]
+recommended = ">=2.0.0,<3.0.0"
+supported = ">=2.0.0,<3.0.0"
+
+[plugin.i18n]
+default_locale = "zh-CN"
+locales_dir = "i18n"
+
+[plugin.store]
+enabled = true
+
+[plugin.ui]
+enabled = true
+
+[[plugin.ui.panel]]
+id = "terminal"
+title = "交易终端"
+entry = "ui/panel.tsx"
+context = "terminal"
+permissions = ["state:read", "config:read", "action:call"]
+
+[[plugin.ui.guide]]
+id = "quickstart"
+title = "使用指南"
+entry = "docs/quickstart.md"
+permissions = ["state:read"]
+
+[plugin_runtime]
+enabled = true
+auto_start = false
+timeout = 60
+startup_failure = "warn"
+
+[moneta]
+initial_balance = 100000.0
+tick_interval_ms = 500
+max_persist_interval_ms = 5000
+default_leverage = 100

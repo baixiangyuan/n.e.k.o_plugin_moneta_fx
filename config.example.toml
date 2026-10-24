@@ -1,0 +1,17 @@
+# MONETA FX 运行配置模板
+# 全部行情与资金均为虚构游戏数据，不对应任何真实市场。
+
+[plugin_runtime]
+enabled = true
+# auto_start 由插件管理器的独立开关控制，首次安装不会自动批准。
+auto_start = false
+
+[moneta]
+# 新注册普通账户发放的模拟资金（USD）
+initial_balance = 100000.0
+# 共享市场时钟推进间隔（毫秒）：越小行情越平滑，负载越高
+tick_interval_ms = 500
+# 共享市场状态自动写入插件存储的间隔（毫秒）
+persist_interval_ms = 5000
+# 开发者密钥：登录行情控制台与账户管理。上线前必须修改。
+developer_key = "moneta-dev-key"

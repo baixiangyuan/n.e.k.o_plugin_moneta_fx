@@ -1,0 +1,36 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# 运行时数据（共享市场存档，含账户口令散列，不要提交）
+data/
+server/data/
+
+# 本地环境配置
+.env
+.env.local
+
+# 编辑器
+.vscode/
+.idea/
+*.swp
+
+# 操作系统
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# 打包产物
+*.neko-plugin
+dist/
+build/
+
+# 日志
+*.log
+artifacts/
+
+# 本地依赖锁（云端部署用 Dockerfile 固定依赖）
+package-lock.json
