@@ -6,7 +6,7 @@ description = "完整移植 MONETA FX 虚构外汇交易室：共享虚构市场
 short_description = "MONETA FX fictional forex paper-trading room: shared market, orders, margin, chart and analytics."
 keywords = ["外汇", "交易", "MONETA", "forex", "trading", "模拟", "paper trading", "K线"]
 version = "1.0.0"
-entry = "plugin.plugins.moneta_fx:MonetaFxPlugin"
+entry = "plugin.plugins.moneta_fx.plugin:MonetaFxPlugin"
 
 [plugin.author]
 name = "MONETA FX port"

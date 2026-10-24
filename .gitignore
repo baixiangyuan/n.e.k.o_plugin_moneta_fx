@@ -17,7 +17,11 @@ server/data/
 .env.local
 
 # 编辑器
-.vscode/
+# .vscode/ 下的 settings.json 与 tasks.json 是插件市场规范要求的仓库支持文件，
+# 必须提交；其余本地编辑器产物仍忽略。
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
 .idea/
 *.swp
 
