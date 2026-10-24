@@ -25,6 +25,8 @@ from plugin.sdk.plugin import (
 
 try:  # 作为插件包导入（plugin.plugins.moneta_fx）
     from .auth import SESSION_COOKIE as SESSION_COOKIE
+    from .cloud import CloudClient as CloudClient
+    from .cloud import RemoteError as RemoteError
     from .engine import (
         LEVERAGE_CHOICES as LEVERAGE_CHOICES,
     )
@@ -58,12 +60,12 @@ try:  # 作为插件包导入（plugin.plugins.moneta_fx）
     from .market import (
         symbol_name as symbol_name,
     )
-    from .cloud import CloudClient as CloudClient
-    from .cloud import RemoteError as RemoteError
     from .world import MarketRuntime as MarketRuntime
     from .world import Session as Session
 except ImportError:  # 平铺导入（本地测试、云端服务端）
     from auth import SESSION_COOKIE as SESSION_COOKIE  # type: ignore
+    from cloud import CloudClient as CloudClient  # type: ignore
+    from cloud import RemoteError as RemoteError  # type: ignore
     from engine import (  # type: ignore
         LEVERAGE_CHOICES as LEVERAGE_CHOICES,
     )
@@ -97,8 +99,6 @@ except ImportError:  # 平铺导入（本地测试、云端服务端）
     from market import (
         symbol_name as symbol_name,
     )
-    from cloud import CloudClient as CloudClient  # type: ignore
-    from cloud import RemoteError as RemoteError  # type: ignore
     from world import MarketRuntime as MarketRuntime  # type: ignore
     from world import Session as Session
 
