@@ -77,6 +77,29 @@ npm run check-hosted-tsx -- plugin/plugins/moneta_fx
 | `tick_interval_ms` | `500` | 市场心跳间隔 |
 | `persist_interval_ms` | `5000` | 自动存档间隔 |
 | `developer_key` | `moneta-dev-key` | 开发者密钥，**上线前必须改** |
+| `server_url` | `""` | 云端后端地址，留空 = 本地离线模式 |
+| `use_cloud` | `false` | 置 `true` 且填了 `server_url` 时走云端 |
+
+#### 连接云端后端
+
+插件默认完全本地运行，数据存在 N.E.K.O. 插件存储里。要让它操作云端共享账户：
+
+```toml
+[moneta]
+server_url = "http://8.152.0.186:4173"
+use_cloud = true
+```
+
+生效后：
+
+- 注册 / 登录 / 下单 / 平仓 / 改单 / 撤单 / 账户分析全部打到服务端
+- N.E.K.O. 面板和浏览器端看到的是**同一个世界**，账户、持仓、行情共享
+- 行情控制台、账户管理、资金调度需要先用服务端的 `MONETA_DEVELOPER_KEY`
+  或 `MONETA_ADMIN_PASSWORD` 登录
+- 本地不再自动存档（数据在服务端）
+- 服务端不可达时自动回退本地模式，不影响插件启动
+
+两种模式的返回结果都带 `mode` 字段（`"cloud"` / `"local"`），便于区分当前连的是哪套后端。
 
 ---
 
@@ -131,15 +154,15 @@ export MONETA_PUBLIC_DOMAIN=your.domain
 
 ---
 
-## 四、三种模式
+## 四、两种模式
 
-| 模式 | 行情来源 | 账户保存 | 说明 |
+| 模式 | 配置 | 行情来源 | 账户保存 |
 | --- | --- | --- | --- |
-| 共享虚构市场 | 服务端统一生成并持续撮合 | 服务端存档 | 所有登录账户同一份行情；开发者可改价、编排走势 |
-| 离线沙盒 | 浏览器本地引擎 | 当前浏览器 localStorage | 无需登录，可暂停/倍速/注入事件 |
-| 云端共享 | 服务端共享行情 | 服务端存档 | 插件面板与云端服务端共用同一套账户体系 |
+| 本地离线（默认） | `server_url` 留空 | 插件进程内生成 | N.E.K.O. 插件存储 |
+| 云端共享 | `server_url` + `use_cloud = true` | 服务端统一生成 | 服务端 `MONETA_DATA_DIR` |
 
-> 插件面板的「云端共享」与云端服务端是同一套后端逻辑的两种入口；两者不共享同一份存档（插件存档在 N.E.K.O. 插件存储，云端存档在 `MONETA_DATA_DIR`）。
+云端模式下，N.E.K.O. 面板与浏览器端访问同一个世界：同一账户、同一持仓、同一行情，
+开发者控制台与资金调度在两端都可用。
 
 ---
 
@@ -172,18 +195,18 @@ export MONETA_PUBLIC_DOMAIN=your.domain
 ## 七、测试
 
 ```bash
-# 引擎冒烟测试（41 项，无需 N.E.K.O. 环境）
+# 插件单元测试（70 项，含云端客户端，无需 N.E.K.O. 环境）
+uv run --python 3.12 --with pytest python -m pytest -c pytest.ini -q
+
+# 引擎冒烟测试（41 项）
 uv run --python 3.12 python smoke_test.py
 
 # 云端服务端端到端测试（35 项，需要服务端已启动）
 uv run --python 3.12 python scripts/e2e_cloud.py
-
-# Hosted TSX 官方校验（需要 N.E.K.O. 仓库的 frontend/plugin-manager）
-cd frontend/plugin-manager
-npm run check-hosted-tsx -- plugin/plugins/moneta_fx
 ```
 
-当前状态：引擎冒烟 41/41 通过，云端 E2E 35/35 通过，官方 `check-hosted-tsx` 通过。
+当前状态：插件单元测试 70/70 通过，引擎冒烟 41/41 通过，云端 E2E 35/35 通过，
+官方 `check-hosted-tsx` 通过，插件市场 verify + release workflow 全绿。
 
 ---
 
