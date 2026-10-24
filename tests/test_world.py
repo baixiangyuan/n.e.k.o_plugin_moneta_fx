@@ -1,4 +1,10 @@
-﻿"""共享市场运行时测试：账户、行情控制、资金调度、存档与停机补绘。"""
+﻿# isort: skip_file
+"""共享市场运行时测试：账户、行情控制、资金调度、存档与停机补绘。
+
+测试以平铺方式导入被测模块（from engine import ...）。CI 把插件目录拷进
+N.E.K.O. 树后没有 .git，ruff 无法判定这些是首方模块，会和 pytest 混成一组；
+这里的 isort pragma 让导入分组保持人工排好的样子。
+"""
 
 from __future__ import annotations
 

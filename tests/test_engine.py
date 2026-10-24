@@ -1,4 +1,10 @@
-﻿"""引擎单元测试：下单、保证金、保护单、隔夜费、强平、幂等。"""
+﻿# isort: skip_file
+"""引擎单元测试：下单、保证金、保护单、隔夜费、强平、幂等。
+
+测试以平铺方式导入被测模块（from engine import ...）。CI 把插件目录拷进
+N.E.K.O. 树后没有 .git，ruff 无法判定这些是首方模块，会和 pytest 混成一组；
+这里的 isort pragma 让导入分组保持人工排好的样子。
+"""
 
 from __future__ import annotations
 
