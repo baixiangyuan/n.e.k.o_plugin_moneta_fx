@@ -15,3 +15,12 @@ tick_interval_ms = 500
 persist_interval_ms = 5000
 # 开发者密钥：登录行情控制台与账户管理。上线前必须修改。
 developer_key = "moneta-dev-key"
+
+# ── 云端后端（可选）────────────────────────────────────────────────────
+# 默认本地离线模式：所有数据存在本机插件存储里。
+# 填入部署好的 MONETA FX 服务端地址并置 use_cloud = true，则账户、持仓、
+# 行情全部走服务端，N.E.K.O. 面板与浏览器端看到同一个世界。
+# server_url = "http://8.152.0.186:4173"
+# use_cloud = true
+server_url = ""
+use_cloud = false

@@ -49,3 +49,7 @@ initial_balance = 100000.0
 tick_interval_ms = 500
 max_persist_interval_ms = 5000
 default_leverage = 100
+# 云端后端：server_url 留空 = 本地离线模式；填服务端地址并置 use_cloud = true，
+# 则账户/持仓/行情全部走云端，与浏览器端共享同一个世界。
+server_url = ""
+use_cloud = false
