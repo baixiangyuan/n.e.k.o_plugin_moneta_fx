@@ -1,4 +1,4 @@
-﻿"""The shared market runtime: one process-wide world plus a per-user session.
+"""The shared market runtime: one process-wide world plus a per-user session.
 
 Both front-ends drive this class:
   * the N.E.K.O. plugin binds a ``user_id`` per panel instance,

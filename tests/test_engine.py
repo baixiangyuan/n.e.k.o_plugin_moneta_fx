@@ -1,4 +1,4 @@
-﻿# isort: skip_file
+# isort: skip_file
 """引擎单元测试：下单、保证金、保护单、隔夜费、强平、幂等。
 
 测试以平铺方式导入被测模块（from engine import ...）。CI 把插件目录拷进

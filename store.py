@@ -1,4 +1,4 @@
-﻿"""Persistent world state: market + accounts, saved through PluginStore."""
+"""Persistent world state: market + accounts, saved through PluginStore."""
 
 from __future__ import annotations
 

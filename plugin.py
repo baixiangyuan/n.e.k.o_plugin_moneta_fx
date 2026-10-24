@@ -1,4 +1,4 @@
-﻿"""MONETA FX — N.E.K.O. plugin entry class.
+"""MONETA FX — N.E.K.O. plugin entry class.
 
 Ports the MONETA FX fictional forex room into a normal ``plugin`` package:
 a shared invented market, multi-account trading with margin/swap/liquidation,

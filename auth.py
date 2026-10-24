@@ -1,4 +1,4 @@
-﻿"""Accounts, sessions and credentials shared by the plugin and the cloud server."""
+"""Accounts, sessions and credentials shared by the plugin and the cloud server."""
 
 from __future__ import annotations
 

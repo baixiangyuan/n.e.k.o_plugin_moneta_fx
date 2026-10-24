@@ -1,4 +1,4 @@
-﻿# isort: skip_file
+# isort: skip_file
 """共享市场运行时测试：账户、行情控制、资金调度、存档与停机补绘。
 
 测试以平铺方式导入被测模块（from engine import ...）。CI 把插件目录拷进

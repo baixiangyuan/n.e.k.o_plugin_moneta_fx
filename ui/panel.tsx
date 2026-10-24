@@ -1,4 +1,4 @@
-﻿// MONETA FX 交易终端 — Hosted TSX 面板
+// MONETA FX 交易终端 — Hosted TSX 面板
 // 复刻 MONETA FX 原版交易室：市场观察、K 线图、下单面板、持仓/挂单/历史、账户分析、行情控制台。
 
 import {
