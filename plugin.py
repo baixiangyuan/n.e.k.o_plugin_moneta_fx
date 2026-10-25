@@ -174,7 +174,17 @@ class MonetaFxPlugin(NekoPluginBase):
     # ── lifecycle ───────────────────────────────────────────────────────
     @lifecycle(id="startup")
     async def on_startup(self, **_):
+        self.logger.info(
+            "MONETA FX startup 开始：use_cloud=%s server_url=%r",
+            self._moneta_settings.get("use_cloud"),
+            self._moneta_settings.get("server_url"),
+        )
         settings = await self._load_settings()
+        self.logger.info(
+            "MONETA FX 配置已加载：use_cloud=%s server_url=%r",
+            self._moneta_settings.get("use_cloud"),
+            self._moneta_settings.get("server_url"),
+        )
         if self._cloud_enabled():
             client = self._ensure_cloud()
             if not client.ping():
@@ -185,7 +195,7 @@ class MonetaFxPlugin(NekoPluginBase):
                 self._moneta_settings["use_cloud"] = False
                 self._cloud = None
             else:
-                self.logger.info("MONETA FX 已连接云端后端 %s", client.base_url)
+                self.logger.info("MONETA FX 已连接云端后端 %s，跳过本地 runtime", client.base_url)
                 return Ok({"status": "ready", "mode": "cloud", "server": client.base_url})
 
         self._runtime = MarketRuntime(
@@ -276,9 +286,23 @@ class MonetaFxPlugin(NekoPluginBase):
 
     # ── session helpers ─────────────────────────────────────────────────
     @property
-    def runtime(self) -> MarketRuntime:
+    def runtime(self) -> Optional[MarketRuntime]:
+        """本地运行时；未建立时为 None。
+
+        ⚠️ 这个 property 绝对不能抛异常：宿主的
+        ``_rebuild_ui_context_map`` 用 ``inspect.getmembers(instance,
+        predicate=callable)`` 枚举插件成员，会读取每个 property 的值。
+        一旦在这里 raise，整个插件进程在 startup 之前就崩了。
+        调用方请用 ``self._require_runtime()``。
+        """
+
+        return self._runtime
+
+    def _require_runtime(self) -> MarketRuntime:
+        """取本地运行时，没有就给出可读错误。"""
+
         if self._runtime is None:
-            raise SdkError("插件尚未启动，请先启动 MONETA FX")
+            raise SdkError("本地模式尚未启动；若已配置云端后端，请确认 use_cloud 已开启")
         return self._runtime
 
     @staticmethod
@@ -370,7 +394,7 @@ class MonetaFxPlugin(NekoPluginBase):
                 "version": "1.0.0",
             }
 
-        runtime = self.runtime
+        runtime = self._require_runtime()
         market = runtime.world.market
         quotes = runtime.all_quotes()
         return {
@@ -415,7 +439,7 @@ class MonetaFxPlugin(NekoPluginBase):
             except RemoteError as error:
                 return Err(SdkError(str(error)))
         try:
-            result = self.runtime.login(username, password)
+            result = self._require_runtime().login(username, password)
             self._bind(session_key, result["user"]["id"])
             return Ok({"message": f"已登录 · {result['user']['username']}", "user": result["user"], "mode": "local"})
         except TradeError as error:
@@ -445,7 +469,7 @@ class MonetaFxPlugin(NekoPluginBase):
             except RemoteError as error:
                 return Err(SdkError(str(error)))
         try:
-            result = self.runtime.register(username, password)
+            result = self._require_runtime().register(username, password)
             self._bind(session_key, result["user"]["id"])
             return Ok({"message": f"账户已创建 · {result['user']['username']}", "user": result["user"], "mode": "local"})
         except TradeError as error:
@@ -474,7 +498,7 @@ class MonetaFxPlugin(NekoPluginBase):
             except RemoteError as error:
                 return Err(SdkError(str(error)))
         try:
-            result = self.runtime.developer_login(key, self._moneta_settings.get("developer_key", DEFAULT_DEVELOPER_KEY))
+            result = self._require_runtime().developer_login(key, self._moneta_settings.get("developer_key", DEFAULT_DEVELOPER_KEY))
             self._bind(session_key, result["user"]["id"])
             return Ok({"message": "开发者已登录", "user": result["user"], "mode": "local"})
         except TradeError as error:
@@ -501,7 +525,7 @@ class MonetaFxPlugin(NekoPluginBase):
                 session.user_id = None
             return Ok({"message": "已退出登录", "mode": "cloud"})
         if session and session.user_id:
-            self.runtime.logout_user(session.user_id)
+            self._require_runtime().logout_user(session.user_id)
             session.user_id = None
         return Ok({"message": "已退出登录", "mode": "local"})
 
@@ -523,7 +547,7 @@ class MonetaFxPlugin(NekoPluginBase):
             except RemoteError as error:
                 return Err(SdkError(str(error)))
         session = self._sessions.get(session_key)
-        user = self.runtime.world.find(session.user_id) if session and session.user_id else None
+        user = self._require_runtime().world.find(session.user_id) if session and session.user_id else None
         return Ok({"user": MarketRuntime.profile(user), "mode": "local"})
 
     # ── entries: market data ────────────────────────────────────────────
@@ -550,11 +574,11 @@ class MonetaFxPlugin(NekoPluginBase):
             except RemoteError as error:
                 return Err(SdkError(str(error)))
         session = self._sessions.get(session_key) or self._bind(session_key, None)
-        user = self.runtime.world.find(session.user_id) if session.user_id else None
+        user = self._require_runtime().world.find(session.user_id) if session.user_id else None
         if user is None:
-            return Ok({"market": self.runtime.admin_snapshot(), "user": None, "selected": symbol, "mode": "local"})
+            return Ok({"market": self._require_runtime().admin_snapshot(), "user": None, "selected": symbol, "mode": "local"})
         try:
-            snapshot = self.runtime.snapshot(user, symbol)
+            snapshot = self._require_runtime().snapshot(user, symbol)
         except TradeError as error:
             return Err(SdkError(str(error)))
         snapshot["selected"] = symbol
@@ -584,8 +608,8 @@ class MonetaFxPlugin(NekoPluginBase):
                 return Ok(result)
             except RemoteError as error:
                 return Err(SdkError(str(error)))
-        quotes = self.runtime.all_quotes()
-        return Ok({"quotes": {s: _public_quote(quotes[s]) for s in wanted if s in quotes}, "time": self.runtime.world.market.time, "mode": "local"})
+        quotes = self._require_runtime().all_quotes()
+        return Ok({"quotes": {s: _public_quote(quotes[s]) for s in wanted if s in quotes}, "time": self._require_runtime().world.market.time, "mode": "local"})
 
     @plugin_entry(
         id="symbols",
@@ -635,7 +659,7 @@ class MonetaFxPlugin(NekoPluginBase):
         session = self._sessions.get(session_key) or self._bind(session_key, None)
         try:
             user = self._require(session)
-            snapshot = self.runtime.trade(user, {
+            snapshot = self._require_runtime().trade(user, {
                 "action": "order",
                 "order": order,
                 "requestId": _request_id(),
@@ -677,7 +701,7 @@ class MonetaFxPlugin(NekoPluginBase):
             body = {"action": "close", "id": id, "requestId": _request_id(), "accountId": user["id"]}
             if lots is not None:
                 body["lots"] = lots
-            snapshot = self.runtime.trade(user, body)
+            snapshot = self._require_runtime().trade(user, body)
             return Ok({"message": "已平仓", "account": snapshot["book"]["account"], "mode": "local"})
         except TradeError as error:
             return Err(SdkError(str(error)))
@@ -702,7 +726,7 @@ class MonetaFxPlugin(NekoPluginBase):
         session = self._sessions.get(session_key) or self._bind(session_key, None)
         try:
             user = self._require(session)
-            snapshot = self.runtime.trade(user, {"action": "closeAll", "requestId": _request_id(), "accountId": user["id"]})
+            snapshot = self._require_runtime().trade(user, {"action": "closeAll", "requestId": _request_id(), "accountId": user["id"]})
             return Ok({"message": "已全部平仓", "account": snapshot["book"]["account"], "mode": "local"})
         except TradeError as error:
             return Err(SdkError(str(error)))
@@ -733,7 +757,7 @@ class MonetaFxPlugin(NekoPluginBase):
         session = self._sessions.get(session_key) or self._bind(session_key, None)
         try:
             user = self._require(session)
-            snapshot = self.runtime.trade(user, {"action": "modify", "id": id, "sl": sl, "tp": tp, "requestId": _request_id(), "accountId": user["id"]})
+            snapshot = self._require_runtime().trade(user, {"action": "modify", "id": id, "sl": sl, "tp": tp, "requestId": _request_id(), "accountId": user["id"]})
             return Ok({"message": "止损止盈已更新", "account": snapshot["book"]["account"], "mode": "local"})
         except TradeError as error:
             return Err(SdkError(str(error)))
@@ -759,7 +783,7 @@ class MonetaFxPlugin(NekoPluginBase):
         session = self._sessions.get(session_key) or self._bind(session_key, None)
         try:
             user = self._require(session)
-            snapshot = self.runtime.trade(user, {"action": "cancel", "id": id, "requestId": _request_id(), "accountId": user["id"]})
+            snapshot = self._require_runtime().trade(user, {"action": "cancel", "id": id, "requestId": _request_id(), "accountId": user["id"]})
             return Ok({"message": "已撤销挂单", "account": snapshot["book"]["account"], "mode": "local"})
         except TradeError as error:
             return Err(SdkError(str(error)))
@@ -802,11 +826,11 @@ class MonetaFxPlugin(NekoPluginBase):
                 return Err(SdkError(str(error)))
 
         session = self._sessions.get(session_key) or self._bind(session_key, None)
-        user = self.runtime.world.find(session.user_id) if session.user_id else None
+        user = self._require_runtime().world.find(session.user_id) if session.user_id else None
         if user is None:
             return Err(SdkError("请先登录虚构市场账户"))
         try:
-            return Ok({"estimate": estimate_order(user["account"], order, self.runtime.all_quotes()), "mode": "local"})
+            return Ok({"estimate": estimate_order(user["account"], order, self._require_runtime().all_quotes()), "mode": "local"})
         except TradeError as error:
             return Err(SdkError(str(error)))
 
@@ -846,7 +870,7 @@ class MonetaFxPlugin(NekoPluginBase):
         session = self._sessions.get(session_key) or self._bind(session_key, None)
         try:
             user = self._require(session)
-            self.runtime.control(user, body)
+            self._require_runtime().control(user, body)
             return Ok({"message": "行情控制已生效", "mode": "local"})
         except TradeError as error:
             return Err(SdkError(str(error)))
@@ -888,10 +912,10 @@ class MonetaFxPlugin(NekoPluginBase):
             if user["role"] != "developer":
                 raise TradeError("只有管理员可以管理账户和资金", status=403)
             if view == "account":
-                return Ok(self.runtime.admin_account_detail(accountId, limit=limit, before=before))
+                return Ok(self._require_runtime().admin_account_detail(accountId, limit=limit, before=before))
             if view == "ledger":
-                return Ok(self.runtime.admin_ledger(account_id=accountId, limit=limit, before=before))
-            return Ok(self.runtime.admin_accounts())
+                return Ok(self._require_runtime().admin_ledger(account_id=accountId, limit=limit, before=before))
+            return Ok(self._require_runtime().admin_accounts())
         except TradeError as error:
             return Err(SdkError(str(error)))
 
@@ -933,7 +957,7 @@ class MonetaFxPlugin(NekoPluginBase):
             body = {"requestId": requestId, "kind": kind, "accountId": accountId, "amount": amount, "reason": reason}
             if destinationId:
                 body["destinationId"] = destinationId
-            result = self.runtime.fund(user, body)
+            result = self._require_runtime().fund(user, body)
             return Ok({"message": "资金调度已执行", "entry": result["entry"], "duplicate": result["duplicate"], "mode": "local"})
         except TradeError as error:
             return Err(SdkError(str(error)))
@@ -962,7 +986,7 @@ class MonetaFxPlugin(NekoPluginBase):
                 return Err(SdkError(str(error)))
 
         session = self._sessions.get(session_key) or self._bind(session_key, None)
-        user = self.runtime.world.find(session.user_id) if session.user_id else None
+        user = self._require_runtime().world.find(session.user_id) if session.user_id else None
         if user is None:
             return Err(SdkError("请先登录虚构市场账户"))
         report = self._build_report(user["account"])
@@ -1002,7 +1026,7 @@ class MonetaFxPlugin(NekoPluginBase):
                 return Err(SdkError(str(error)))
 
         session = self._sessions.get(session_key) or self._bind(session_key, None)
-        user = self.runtime.world.find(session.user_id) if session.user_id else None
+        user = self._require_runtime().world.find(session.user_id) if session.user_id else None
         if user is None:
             return Err(SdkError("请先登录虚构市场账户"))
         account = user["account"]

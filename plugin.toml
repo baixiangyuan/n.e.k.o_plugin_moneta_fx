@@ -5,7 +5,7 @@ type = "plugin"
 description = "完整移植 MONETA FX 虚构外汇交易室：共享虚构市场、市价/限价/突破单、止损止盈、保证金与强平、隔夜费结算、K 线图与账户分析。行情控制台仅供插件管理员使用。"
 short_description = "MONETA FX fictional forex paper-trading room: shared market, orders, margin, chart and analytics."
 keywords = ["外汇", "交易", "MONETA", "forex", "trading", "模拟", "paper trading", "K线"]
-version = "1.0.2"
+version = "1.0.3"
 entry = "plugin.plugins.moneta_fx.plugin:MonetaFxPlugin"
 
 [plugin.author]

@@ -33,7 +33,7 @@ def test_plugin_toml_declares_identity():
     assert 'id = "moneta_fx"' in text
     assert 'name = "MONETA FX · 外汇模拟交易室"' in text
     assert 'entry = "plugin.plugins.moneta_fx.plugin:MonetaFxPlugin"' in text
-    assert 'version = "1.0.2"' in text
+    assert 'version = "1.0.3"' in text
 
 
 def test_plugin_toml_declares_ui_and_i18n():
@@ -197,3 +197,42 @@ def test_bind_works_in_cloud_mode_without_local_runtime():
     # Session.user 要给出可读的错误，而不是 AttributeError。
     with pytest.raises(TradeError):
         _ = session.user
+
+
+def test_getmembers_does_not_crash_before_startup():
+    """宿主要求：startup 之前 inspect.getmembers 必须能跑完。
+
+    宿主的 ``_rebuild_ui_context_map`` 在 startup 之前用
+    ``inspect.getmembers(instance, predicate=callable)`` 枚举插件成员，
+    会读取每个 property 的值。任何 property 在这里抛异常都会让整个
+    插件进程崩掉——曾经 runtime property 抛 SdkError，开机即崩。
+    """
+
+    import inspect
+
+    plugin = _make_plugin()
+
+    # 未 startup：_runtime 是 None，getmembers 也必须安全返回。
+    members = inspect.getmembers(plugin, predicate=callable)
+    assert members, "至少应收集到插件的 entry 方法"
+
+    # 每个 property 单独读取也不能抛。
+    for name, prop in inspect.getmembers(type(plugin), lambda o: isinstance(o, property)):
+        try:
+            getattr(plugin, name)
+        except Exception as exc:  # pragma: no cover - 失败时给出明确信息
+            pytest.fail(f"property {name!r} 在 startup 前读取时抛了 {type(exc).__name__}: {exc}")
+
+
+def test_require_runtime_gives_readable_error():
+    """_require_runtime() 才负责报错，且消息可读。"""
+
+    from plugin.sdk.plugin import SdkError
+
+    plugin = _make_plugin()
+    with pytest.raises(SdkError, match="本地模式尚未启动"):
+        plugin._require_runtime()
+
+    # startup 之后就能拿到 runtime。
+    asyncio.run(plugin.on_startup())
+    assert plugin._require_runtime() is not None
