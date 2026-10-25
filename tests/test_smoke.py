@@ -2,8 +2,18 @@
 
 from __future__ import annotations
 
+import asyncio
+import importlib.util
+import json
 import re
+import tomllib
 from pathlib import Path
+
+import pytest
+from packaging.specifiers import SpecifierSet
+from packaging.version import Version
+
+from engine import TradeError
 
 PLUGIN_ROOT = Path(__file__).resolve().parents[1]
 
@@ -62,8 +72,6 @@ def test_workflows_target_this_plugin_id():
 
 
 def test_i18n_files_are_valid_json_and_share_keys():
-    import json
-
     zh = json.loads(read("i18n/zh-CN.json"))
     en = json.loads(read("i18n/en.json"))
     assert zh and en
@@ -88,8 +96,6 @@ def test_panel_uses_no_dynamic_import():
 
 
 def test_config_schema_is_valid_json():
-    import json
-
     schema = json.loads(read("config.schema.json"))
     assert schema["type"] == "object"
     assert "moneta" in schema["properties"]
@@ -101,9 +107,6 @@ def test_config_schema_declares_every_moneta_key():
     宿主用 JSON Schema 校验配置，schema 未声明的键会让插件在列表里
     显示"config could not be parsed or validated"。
     """
-
-    import json
-    import tomllib
 
     manifest = tomllib.loads(read("plugin.toml"))
     example = tomllib.loads(read("config.example.toml"))
@@ -123,11 +126,6 @@ def test_sdk_range_contains_the_host_version():
     文档里的 "SDK v2" 指 API 代次而不是版本号，写成 >=2.0.0 会让
     _check_sdk_compatibility 直接判不兼容，插件根本加载不了。
     """
-
-    import tomllib
-
-    from packaging.specifiers import SpecifierSet
-    from packaging.version import Version
 
     HOST_SDK_VERSION = "0.1.0"
 
@@ -154,8 +152,6 @@ def _make_plugin():
     因为插件文件名就叫 plugin.py，平铺导入时装的是 stub 那一个。
     """
 
-    import importlib.util
-
     spec = importlib.util.spec_from_file_location("moneta_plugin_under_test", PLUGIN_ROOT / "plugin.py")
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
@@ -168,8 +164,6 @@ def test_cloud_mode_startup_skips_local_runtime():
     这是曾经崩过的路径：面板随后调用 _bind()，而 _bind 无脑访问
     self.runtime.world，_runtime 是 None 就抛"插件尚未启动"。
     """
-
-    import asyncio
 
     plugin = _make_plugin()
     plugin._moneta_settings["server_url"] = "http://moneta-test.invalid:4173"
@@ -195,9 +189,5 @@ def test_bind_works_in_cloud_mode_without_local_runtime():
     assert session.user_id == "user-1"
     assert session.world is None
     # Session.user 要给出可读的错误，而不是 AttributeError。
-    import pytest
-
-    from engine import TradeError
-
     with pytest.raises(TradeError):
         _ = session.user
