@@ -93,3 +93,48 @@ def test_config_schema_is_valid_json():
     schema = json.loads(read("config.schema.json"))
     assert schema["type"] == "object"
     assert "moneta" in schema["properties"]
+
+
+def test_config_schema_declares_every_moneta_key():
+    """[moneta] 里的每个键都必须在 config.schema.json 里声明。
+
+    宿主用 JSON Schema 校验配置，schema 未声明的键会让插件在列表里
+    显示"config could not be parsed or validated"。
+    """
+
+    import json
+    import tomllib
+
+    manifest = tomllib.loads(read("plugin.toml"))
+    example = tomllib.loads(read("config.example.toml"))
+    schema = json.loads(read("config.schema.json"))
+
+    declared = set(schema["properties"]["moneta"]["properties"])
+    for source, config in (("plugin.toml", manifest), ("config.example.toml", example)):
+        actual = set(config.get("moneta", {}))
+        missing = actual - declared
+        assert not missing, f"{source} 的 [moneta] 有 schema 未声明的键: {sorted(missing)}"
+
+
+def test_sdk_range_contains_the_host_version():
+    """[plugin.sdk] 的 supported 必须覆盖宿主的 SDK_VERSION。
+
+    宿主的 SDK_VERSION 目前是 0.1.0（plugin/sdk/shared/constants.py）。
+    文档里的 "SDK v2" 指 API 代次而不是版本号，写成 >=2.0.0 会让
+    _check_sdk_compatibility 直接判不兼容，插件根本加载不了。
+    """
+
+    import tomllib
+
+    from packaging.specifiers import SpecifierSet
+    from packaging.version import Version
+
+    HOST_SDK_VERSION = "0.1.0"
+
+    sdk = tomllib.loads(read("plugin.toml"))["plugin"]["sdk"]
+    for key in ("recommended", "supported"):
+        spec = sdk.get(key)
+        assert spec, f"plugin.sdk.{key} 未声明"
+        assert Version(HOST_SDK_VERSION) in SpecifierSet(spec), (
+            f"plugin.sdk.{key} = {spec!r} 不包含宿主 SDK 版本 {HOST_SDK_VERSION}"
+        )

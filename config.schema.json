@@ -73,6 +73,35 @@
           "minLength": 6,
           "maxLength": 128,
           "default": "moneta-dev-key"
+        },
+        "server_url": {
+          "type": "string",
+          "title": "云端后端地址",
+          "x-title-i18n": {
+            "zh-CN": "云端后端地址",
+            "en": "Cloud server URL"
+          },
+          "description": "留空为本地离线模式；填入部署好的 MONETA FX 服务端地址并开启下方开关，账户与行情即走云端。",
+          "x-description-i18n": {
+            "zh-CN": "留空为本地离线模式；填入部署好的 MONETA FX 服务端地址并开启下方开关，账户与行情即走云端。",
+            "en": "Leave empty for local offline mode. Fill in your MONETA FX server URL and enable the toggle below to use the cloud."
+          },
+          "maxLength": 512,
+          "default": ""
+        },
+        "use_cloud": {
+          "type": "boolean",
+          "title": "使用云端后端",
+          "x-title-i18n": {
+            "zh-CN": "使用云端后端",
+            "en": "Use cloud backend"
+          },
+          "description": "开启后，N.E.K.O. 面板与浏览器端共享同一套账户、持仓与行情。",
+          "x-description-i18n": {
+            "zh-CN": "开启后，N.E.K.O. 面板与浏览器端共享同一套账户、持仓与行情。",
+            "en": "When on, the N.E.K.O. panel and the browser share the same accounts, positions and quotes."
+          },
+          "default": false
         }
       }
     }

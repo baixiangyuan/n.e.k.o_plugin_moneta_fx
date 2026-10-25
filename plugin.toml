@@ -12,8 +12,10 @@ entry = "plugin.plugins.moneta_fx.plugin:MonetaFxPlugin"
 name = "MONETA FX port"
 
 [plugin.sdk]
-recommended = ">=2.0.0,<3.0.0"
-supported = ">=2.0.0,<3.0.0"
+# 宿主的 SDK_VERSION 目前是 0.1.0（plugin/sdk/shared/constants.py）。
+# 文档里的 "SDK v2" 指 API 代次，不是版本号，别写成 >=2.0.0。
+recommended = ">=0.1.0,<0.2.0"
+supported = ">=0.1.0,<0.3.0"
 
 [plugin.i18n]
 default_locale = "zh-CN"
@@ -47,8 +49,8 @@ startup_failure = "warn"
 [moneta]
 initial_balance = 100000.0
 tick_interval_ms = 500
-max_persist_interval_ms = 5000
-default_leverage = 100
+persist_interval_ms = 5000
+developer_key = "moneta-dev-key"
 # 云端后端：server_url 留空 = 本地离线模式；填服务端地址并置 use_cloud = true，
 # 则账户/持仓/行情全部走云端，与浏览器端共享同一个世界。
 server_url = ""
