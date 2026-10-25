@@ -51,7 +51,7 @@ initial_balance = 100000.0
 tick_interval_ms = 500
 persist_interval_ms = 5000
 developer_key = "moneta-dev-key"
-# 云端后端：server_url 留空 = 本地离线模式；填服务端地址并置 use_cloud = true，
-# 则账户/持仓/行情全部走云端，与浏览器端共享同一个世界。
-server_url = ""
-use_cloud = false
+# 云端后端：默认连到已部署的服务端。想用本地离线模式就把 server_url 改成 ""
+# 并把 use_cloud 改成 false（在插件管理器的配置页改，别改这个文件）。
+server_url = "http://8.152.0.186:4173"
+use_cloud = true

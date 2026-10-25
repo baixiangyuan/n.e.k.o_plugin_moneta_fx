@@ -82,13 +82,7 @@ npm run check-hosted-tsx -- plugin/plugins/moneta_fx
 
 #### 连接云端后端
 
-插件默认完全本地运行，数据存在 N.E.K.O. 插件存储里。要让它操作云端共享账户：
-
-```toml
-[moneta]
-server_url = "http://8.152.0.186:4173"
-use_cloud = true
-```
+插件**默认连到已部署的服务端**（`http://8.152.0.186:4173`），装上去就能操作云端共享账户。要改成本地离线模式，在插件管理器的配置页把 `server_url` 改成 `""`、`use_cloud` 改成 `false`。
 
 生效后：
 

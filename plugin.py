@@ -415,6 +415,16 @@ class MonetaFxPlugin(NekoPluginBase):
         }
 
     # ── entries: identity ───────────────────────────────────────────────
+    @ui.action(
+        id="login",
+        label=tr("ui.login.label", default="登录"),
+        icon="login",
+        tone="default",
+        group="账户",
+        order=20,
+        confirm=False,
+        refresh_context=True,
+    )
     @plugin_entry(
         id="login",
         name=tr("entries.login.name", default="登录共享市场"),
@@ -445,6 +455,16 @@ class MonetaFxPlugin(NekoPluginBase):
         except TradeError as error:
             return Err(SdkError(str(error)))
 
+    @ui.action(
+        id="register",
+        label=tr("ui.register.label", default="注册"),
+        icon="user-plus",
+        tone="default",
+        group="账户",
+        order=21,
+        confirm=False,
+        refresh_context=True,
+    )
     @plugin_entry(
         id="register",
         name=tr("entries.register.name", default="注册普通账户"),
@@ -475,6 +495,16 @@ class MonetaFxPlugin(NekoPluginBase):
         except TradeError as error:
             return Err(SdkError(str(error)))
 
+    @ui.action(
+        id="developer_login",
+        label=tr("ui.developer_login.label", default="开发者登录"),
+        icon="key",
+        tone="default",
+        group="账户",
+        order=22,
+        confirm=False,
+        refresh_context=True,
+    )
     @plugin_entry(
         id="developer_login",
         name=tr("entries.developerLogin.name", default="开发者登录"),
@@ -504,6 +534,16 @@ class MonetaFxPlugin(NekoPluginBase):
         except TradeError as error:
             return Err(SdkError(str(error)))
 
+    @ui.action(
+        id="logout",
+        label=tr("ui.logout.label", default="退出登录"),
+        icon="logout",
+        tone="default",
+        group="账户",
+        order=23,
+        confirm=False,
+        refresh_context=True,
+    )
     @plugin_entry(
         id="logout",
         name=tr("entries.logout.name", default="退出登录"),
@@ -529,6 +569,16 @@ class MonetaFxPlugin(NekoPluginBase):
             session.user_id = None
         return Ok({"message": "已退出登录", "mode": "local"})
 
+    @ui.action(
+        id="session",
+        label=tr("ui.session.label", default="当前会话"),
+        icon="user",
+        tone="default",
+        group="账户",
+        order=24,
+        confirm=False,
+        refresh_context=True,
+    )
     @plugin_entry(
         id="session",
         name=tr("entries.session.name", default="当前会话"),
@@ -551,6 +601,16 @@ class MonetaFxPlugin(NekoPluginBase):
         return Ok({"user": MarketRuntime.profile(user), "mode": "local"})
 
     # ── entries: market data ────────────────────────────────────────────
+    @ui.action(
+        id="state",
+        label=tr("ui.state.label", default="账户快照"),
+        icon="chart",
+        tone="default",
+        group="行情",
+        order=0,
+        confirm=False,
+        refresh_context=True,
+    )
     @plugin_entry(
         id="state",
         name=tr("entries.state.name", default="账户快照"),
@@ -585,6 +645,16 @@ class MonetaFxPlugin(NekoPluginBase):
         snapshot["mode"] = "local"
         return Ok(snapshot)
 
+    @ui.action(
+        id="quotes",
+        label=tr("ui.quotes.label", default="批量报价"),
+        icon="quote",
+        tone="default",
+        group="行情",
+        order=1,
+        confirm=False,
+        refresh_context=True,
+    )
     @plugin_entry(
         id="quotes",
         name=tr("entries.quotes.name", default="批量报价"),
@@ -611,6 +681,16 @@ class MonetaFxPlugin(NekoPluginBase):
         quotes = self._require_runtime().all_quotes()
         return Ok({"quotes": {s: _public_quote(quotes[s]) for s in wanted if s in quotes}, "time": self._require_runtime().world.market.time, "mode": "local"})
 
+    @ui.action(
+        id="symbols",
+        label=tr("ui.symbols.label", default="货币对目录"),
+        icon="list",
+        tone="default",
+        group="行情",
+        order=2,
+        confirm=False,
+        refresh_context=True,
+    )
     @plugin_entry(
         id="symbols",
         name=tr("entries.symbols.name", default="货币对目录"),
@@ -625,6 +705,16 @@ class MonetaFxPlugin(NekoPluginBase):
         })
 
     # ── entries: trading ────────────────────────────────────────────────
+    @ui.action(
+        id="order",
+        label=tr("ui.order.label", default="下单"),
+        icon="buy",
+        tone="primary",
+        group="交易",
+        order=10,
+        confirm=False,
+        refresh_context=True,
+    )
     @plugin_entry(
         id="order",
         name=tr("entries.order.name", default="下单"),
@@ -670,6 +760,16 @@ class MonetaFxPlugin(NekoPluginBase):
         except TradeError as error:
             return Err(SdkError(str(error)))
 
+    @ui.action(
+        id="close",
+        label=tr("ui.close.label", default="平仓"),
+        icon="sell",
+        tone="default",
+        group="交易",
+        order=12,
+        confirm=False,
+        refresh_context=True,
+    )
     @plugin_entry(
         id="close",
         name=tr("entries.close.name", default="平仓"),
@@ -706,6 +806,16 @@ class MonetaFxPlugin(NekoPluginBase):
         except TradeError as error:
             return Err(SdkError(str(error)))
 
+    @ui.action(
+        id="close_all",
+        label=tr("ui.close_all.label", default="全部平仓"),
+        icon="sell-all",
+        tone="danger",
+        group="交易",
+        order=13,
+        confirm=True,
+        refresh_context=True,
+    )
     @plugin_entry(
         id="close_all",
         name=tr("entries.closeAll.name", default="全部平仓"),
@@ -731,6 +841,16 @@ class MonetaFxPlugin(NekoPluginBase):
         except TradeError as error:
             return Err(SdkError(str(error)))
 
+    @ui.action(
+        id="modify",
+        label=tr("ui.modify.label", default="修改止损止盈"),
+        icon="edit",
+        tone="default",
+        group="交易",
+        order=14,
+        confirm=False,
+        refresh_context=True,
+    )
     @plugin_entry(
         id="modify",
         name=tr("entries.modify.name", default="修改止损止盈"),
@@ -762,6 +882,16 @@ class MonetaFxPlugin(NekoPluginBase):
         except TradeError as error:
             return Err(SdkError(str(error)))
 
+    @ui.action(
+        id="cancel",
+        label=tr("ui.cancel.label", default="撤销挂单"),
+        icon="close",
+        tone="default",
+        group="交易",
+        order=15,
+        confirm=False,
+        refresh_context=True,
+    )
     @plugin_entry(
         id="cancel",
         name=tr("entries.cancel.name", default="撤销挂单"),
@@ -788,6 +918,16 @@ class MonetaFxPlugin(NekoPluginBase):
         except TradeError as error:
             return Err(SdkError(str(error)))
 
+    @ui.action(
+        id="estimate",
+        label=tr("ui.estimate.label", default="预估成本"),
+        icon="calc",
+        tone="default",
+        group="交易",
+        order=11,
+        confirm=False,
+        refresh_context=True,
+    )
     @plugin_entry(
         id="estimate",
         name=tr("entries.estimate.name", default="预估下单成本"),
@@ -835,6 +975,16 @@ class MonetaFxPlugin(NekoPluginBase):
             return Err(SdkError(str(error)))
 
     # ── entries: market control ─────────────────────────────────────────
+    @ui.action(
+        id="control",
+        label=tr("ui.control.label", default="行情控制"),
+        icon="sliders",
+        tone="default",
+        group="管理",
+        order=30,
+        confirm=False,
+        refresh_context=True,
+    )
     @plugin_entry(
         id="control",
         name=tr("entries.control.name", default="行情控制"),
@@ -875,6 +1025,16 @@ class MonetaFxPlugin(NekoPluginBase):
         except TradeError as error:
             return Err(SdkError(str(error)))
 
+    @ui.action(
+        id="admin",
+        label=tr("ui.admin.label", default="账户管理"),
+        icon="shield",
+        tone="default",
+        group="管理",
+        order=31,
+        confirm=False,
+        refresh_context=True,
+    )
     @plugin_entry(
         id="admin",
         name=tr("entries.admin.name", default="账户管理"),
@@ -919,6 +1079,16 @@ class MonetaFxPlugin(NekoPluginBase):
         except TradeError as error:
             return Err(SdkError(str(error)))
 
+    @ui.action(
+        id="fund",
+        label=tr("ui.fund.label", default="资金调度"),
+        icon="coins",
+        tone="default",
+        group="管理",
+        order=32,
+        confirm=True,
+        refresh_context=True,
+    )
     @plugin_entry(
         id="fund",
         name=tr("entries.fund.name", default="资金调度"),
@@ -962,6 +1132,16 @@ class MonetaFxPlugin(NekoPluginBase):
         except TradeError as error:
             return Err(SdkError(str(error)))
 
+    @ui.action(
+        id="report",
+        label=tr("ui.report.label", default="账户分析"),
+        icon="report",
+        tone="default",
+        group="账户",
+        order=25,
+        confirm=False,
+        refresh_context=True,
+    )
     @plugin_entry(
         id="report",
         name=tr("entries.report.name", default="账户分析"),
@@ -993,6 +1173,16 @@ class MonetaFxPlugin(NekoPluginBase):
         report["mode"] = "local"
         return Ok({"report": report})
 
+    @ui.action(
+        id="settings",
+        label=tr("ui.settings.label", default="交易参数"),
+        icon="settings",
+        tone="default",
+        group="账户",
+        order=26,
+        confirm=False,
+        refresh_context=True,
+    )
     @plugin_entry(
         id="settings",
         name=tr("entries.settings.name", default="交易参数"),
@@ -1042,6 +1232,16 @@ class MonetaFxPlugin(NekoPluginBase):
         return Ok({"settings": candidate, "mode": "local"})
 
     # ── entries: reference ──────────────────────────────────────────────
+    @ui.action(
+        id="pip_info",
+        label=tr("ui.pip_info.label", default="货币对信息"),
+        icon="info",
+        tone="default",
+        group="行情",
+        order=3,
+        confirm=False,
+        refresh_context=True,
+    )
     @plugin_entry(
         id="pip_info",
         name=tr("entries.pipInfo.name", default="货币对信息"),

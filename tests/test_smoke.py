@@ -125,6 +125,18 @@ def test_config_schema_declares_every_moneta_key():
         assert not missing, f"{source} 的 [moneta] 有 schema 未声明的键: {sorted(missing)}"
 
 
+def test_plugin_toml_defaults_to_the_cloud_backend():
+    """清单里的 [moneta] 默认连云端，装上去就能用服务端账户。
+
+    改成空 server_url 会让插件退回本地模式，用户看到的账户和浏览器端
+    不是同一份——这个默认值是有意为之。
+    """
+
+    moneta = tomllib.loads(read("plugin.toml"))["moneta"]
+    assert moneta["use_cloud"] is True, "默认应为云端模式"
+    assert moneta["server_url"].startswith("http"), "server_url 必须是完整地址"
+
+
 def test_sdk_range_contains_the_host_version():
     """[plugin.sdk] 的 supported 必须覆盖宿主的 SDK_VERSION。
 
@@ -236,3 +248,62 @@ def test_require_runtime_gives_readable_error():
     # startup 之后就能拿到 runtime。
     asyncio.run(plugin.on_startup())
     assert plugin._require_runtime() is not None
+
+
+# 面板 ui/panel.tsx 通过 call(id) 调用的动作，缺一个面板就报"xxx 动作不可用"。
+PANEL_ACTIONS = {
+    "state", "estimate", "order", "close", "close_all", "cancel", "modify",
+    "developer_login", "register", "login", "logout", "control", "report", "settings",
+}
+
+
+def _ui_action_ids(plugin) -> set:
+    """按宿主的识别逻辑收集带 __neko_ui_action__ 元数据的 entry id。"""
+
+    ids = set()
+    for name in dir(plugin):
+        try:
+            member = getattr(plugin, name)
+        except Exception:
+            continue
+        if not callable(member):
+            continue
+        for candidate in (member, getattr(member, "__func__", None)):
+            meta = getattr(candidate, "__neko_ui_action__", None) if candidate else None
+            if isinstance(meta, dict):
+                ids.add(str(meta.get("id")))
+                break
+    return ids
+
+
+def test_panel_actions_are_declared():
+    """面板用到的每个动作都必须有 @ui.action，否则 props.actions 里没有它。
+
+    宿主的 _collect_ui_actions() 只收带 __neko_ui_action__ 属性的 entry，
+    漏加一个，前端 call(id) 就抛"xxx 动作不可用"。
+    """
+
+    plugin = _make_plugin()
+    declared = _ui_action_ids(plugin)
+    missing = PANEL_ACTIONS - declared
+    assert not missing, f"面板需要但未声明 @ui.action 的动作: {sorted(missing)}"
+
+
+def test_ui_action_metadata_is_complete():
+    """每个 @ui.action 都要有 label/group，宿主按它们排序和分组。"""
+
+    plugin = _make_plugin()
+    for name in dir(plugin):
+        try:
+            member = getattr(plugin, name)
+        except Exception:
+            continue
+        if not callable(member):
+            continue
+        for candidate in (member, getattr(member, "__func__", None)):
+            meta = getattr(candidate, "__neko_ui_action__", None) if candidate else None
+            if isinstance(meta, dict):
+                assert meta.get("label"), f"{name} 的 @ui.action 缺 label"
+                assert meta.get("group"), f"{name} 的 @ui.action 缺 group"
+                assert isinstance(meta.get("order"), int), f"{name} 的 @ui.action order 必须是整数"
+                break
