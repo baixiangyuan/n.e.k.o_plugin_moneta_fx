@@ -107,6 +107,15 @@ DEFAULT_DEVELOPER_KEY = "moneta-dev-key"
 SERVER_URL_NAME = "server_url"
 
 
+class _NullLogger:
+    """logger 兜底：宿主没给 logger 时静默丢弃，不让生命周期崩掉。"""
+
+    def _noop(self, *args, **kwargs):
+        return None
+
+    debug = info = warning = error = exception = critical = _noop
+
+
 def _truthy(value: Any) -> bool:
     """配置里的布尔可能来自 TOML（bool）或环境变量（str）。"""
     if isinstance(value, str):
@@ -124,7 +133,7 @@ class MonetaFxPlugin(NekoPluginBase):
 
     def __init__(self, ctx):
         super().__init__(ctx)
-        self.logger = ctx.logger
+        self.logger = getattr(ctx, "logger", None) or _NullLogger()
         self._runtime: Optional[MarketRuntime] = None
         self._sessions: Dict[str, Session] = {}
         self._moneta_settings: Dict[str, Any] = {
@@ -154,7 +163,10 @@ class MonetaFxPlugin(NekoPluginBase):
         if not self._cloud_enabled():
             raise SdkError("未配置云端后端：请在 [moneta] 中设置 server_url 并启用 use_cloud")
         if self._cloud is None:
-            from .cloud import CloudClient
+            try:  # 作为插件包导入（plugin.plugins.moneta_fx）
+                from .cloud import CloudClient
+            except ImportError:  # 平铺导入（本地测试、云端服务端）
+                from cloud import CloudClient  # type: ignore
 
             self._cloud = CloudClient(str(self._moneta_settings["server_url"]).strip())
         return self._cloud
@@ -299,12 +311,18 @@ class MonetaFxPlugin(NekoPluginBase):
         }
 
     def _bind(self, session_key: str, user_id: Optional[str]) -> Session:
+        """把面板实例绑到一个账户。
+
+        云端模式下没有本地 world，session.world 留空即可——云端分支用不到它。
+        """
         session = self._sessions.get(session_key)
         if session is None:
-            session = Session(user_id, self.runtime.world)
+            world = self._runtime.world if self._runtime is not None else None
+            session = Session(user_id, world)
             self._sessions[session_key] = session
         session.user_id = user_id
-        session.world = self.runtime.world
+        if self._runtime is not None:
+            session.world = self._runtime.world
         return session
 
     def _require(self, session: Session) -> Dict[str, Any]:
@@ -320,25 +338,37 @@ class MonetaFxPlugin(NekoPluginBase):
 
         mode = "cloud" if self._cloud_enabled() else "local"
         if mode == "cloud":
+            client = self._ensure_cloud()
             try:
-                state = self._ensure_cloud().world_state()
-                book = state.get("book") or {}
-                market = state.get("market") or {}
-                quotes = {s: q for s, q in (book.get("quotes") or {}).items() if s in WATCHLIST}
-                return {
-                    "mode": "cloud",
-                    "market": market,
-                    "watchlist": WATCHLIST,
-                    "majors": MAJORS,
-                    "symbolCount": len(OFFLINE_SYMBOLS),
-                    "quotes": quotes,
-                    "initialBalance": self._moneta_settings.get("initial_balance", 100000.0),
-                    "version": "1.0.0",
-                }
+                state = client.world_state()
             except RemoteError:
                 # 云端暂时不可用，退回本地视图（本地 runtime 可能没启动）。
+                state = {}
                 if self._runtime is None:
                     raise SdkError("云端后端无响应，且本地模式未启动")
+            book = state.get("book") or {}
+            market = state.get("market") or {}
+            quotes = {s: q for s, q in (book.get("quotes") or {}).items() if s in WATCHLIST}
+            if not quotes:
+                # 未登录时 /api/world/state 不返回 book，用公开报价接口兜底，
+                # 否则面板一打开就是空的。服务端单次最多 12 个，分批取。
+                quotes = {}
+                for start in range(0, len(WATCHLIST), 12):
+                    batch = WATCHLIST[start:start + 12]
+                    try:
+                        quotes.update(client.quotes(batch).get("quotes") or {})
+                    except RemoteError:
+                        break
+            return {
+                "mode": "cloud",
+                "market": market,
+                "watchlist": WATCHLIST,
+                "majors": MAJORS,
+                "symbolCount": len(OFFLINE_SYMBOLS),
+                "quotes": quotes,
+                "initialBalance": self._moneta_settings.get("initial_balance", 100000.0),
+                "version": "1.0.0",
+            }
 
         runtime = self.runtime
         market = runtime.world.market
@@ -766,9 +796,8 @@ class MonetaFxPlugin(NekoPluginBase):
                 account = book.get("account")
                 if not account:
                     return Err(SdkError("请先登录虚构市场账户"))
-                from .engine import estimate_order as _estimate
-
-                return Ok({"estimate": _estimate(account, order, book.get("quotes") or {}), "mode": "cloud"})
+                # estimate_order 已在模块顶层导入，两种模式共用。
+                return Ok({"estimate": estimate_order(account, order, book.get("quotes") or {}), "mode": "cloud"})
             except RemoteError as error:
                 return Err(SdkError(str(error)))
 

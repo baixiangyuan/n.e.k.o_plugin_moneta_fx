@@ -138,3 +138,66 @@ def test_sdk_range_contains_the_host_version():
         assert Version(HOST_SDK_VERSION) in SpecifierSet(spec), (
             f"plugin.sdk.{key} = {spec!r} 不包含宿主 SDK 版本 {HOST_SDK_VERSION}"
         )
+
+
+class _Ctx:
+    """最小插件上下文，供生命周期与云端模式测试使用。"""
+
+    logger = None
+
+
+def _make_plugin():
+    """按文件路径加载插件模块。
+
+    不能写 ``from plugin import MonetaFxPlugin``——tests/conftest.py 装的
+    SDK stub 占用 "plugin" 这个名字；也不能 ``import plugin_module``，
+    因为插件文件名就叫 plugin.py，平铺导入时装的是 stub 那一个。
+    """
+
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location("moneta_plugin_under_test", PLUGIN_ROOT / "plugin.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module.MonetaFxPlugin(_Ctx())
+
+
+def test_cloud_mode_startup_skips_local_runtime():
+    """云端可达时 on_startup 只建 CloudClient，不建本地 MarketRuntime。
+
+    这是曾经崩过的路径：面板随后调用 _bind()，而 _bind 无脑访问
+    self.runtime.world，_runtime 是 None 就抛"插件尚未启动"。
+    """
+
+    import asyncio
+
+    plugin = _make_plugin()
+    plugin._moneta_settings["server_url"] = "http://moneta-test.invalid:4173"
+    plugin._moneta_settings["use_cloud"] = True
+
+    # ping 必然失败（域名不存在），应当回退本地模式并正常建 runtime。
+    result = asyncio.run(plugin.on_startup())
+    assert result.value["status"] == "ready"
+    assert result.value["mode"] == "local"
+    assert plugin._runtime is not None
+
+
+def test_bind_works_in_cloud_mode_without_local_runtime():
+    """云端模式下 _bind 不能碰 self.runtime。"""
+
+    plugin = _make_plugin()
+    plugin._moneta_settings["server_url"] = "http://moneta-test.invalid:4173"
+    plugin._moneta_settings["use_cloud"] = True
+    plugin._cloud = object()  # 假装已连接，_cloud_enabled() 只看配置
+
+    # 没建本地 runtime，_bind 必须能用。
+    session = plugin._bind("panel-1", "user-1")
+    assert session.user_id == "user-1"
+    assert session.world is None
+    # Session.user 要给出可读的错误，而不是 AttributeError。
+    import pytest
+
+    from engine import TradeError
+
+    with pytest.raises(TradeError):
+        _ = session.user

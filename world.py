@@ -163,9 +163,13 @@ MAX_QUOTES_PER_POLL = 12
 
 
 class Session:
-    """One authenticated viewer of the shared market."""
+    """One authenticated viewer of the shared market.
 
-    def __init__(self, user_id: Optional[str], world: World) -> None:
+    ``world`` 在云端模式下为 ``None``——插件的云端分支不经过本地 world，
+    账户信息由服务端会话 cookie 决定。
+    """
+
+    def __init__(self, user_id: Optional[str], world: Optional[World]) -> None:
         self.user_id = user_id
         self.world = world
         self.selected = "EUR/USD"
@@ -176,6 +180,8 @@ class Session:
 
     @property
     def user(self) -> Dict[str, Any]:
+        if self.world is None:
+            raise TradeError("云端模式下请通过服务端会话访问账户", status=401)
         user = self.world.find(self.user_id)
         if user is None:
             raise TradeError("请先登录虚构市场账户", status=401)
@@ -183,13 +189,16 @@ class Session:
 
     @property
     def is_developer(self) -> bool:
+        if self.world is None:
+            return False
         user = self.world.find(self.user_id)
         return bool(user and user["role"] == "developer")
 
     def logout(self) -> None:
         self.user_id = None
         self.pending_trade = None
-        self.world = self.world
+        if self.world is not None:
+            self.world = self.world
 
 
 class MarketRuntime:
