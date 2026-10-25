@@ -17,7 +17,7 @@ def test_plugin_toml_declares_identity():
     assert 'id = "moneta_fx"' in text
     assert 'name = "MONETA FX · 外汇模拟交易室"' in text
     assert 'entry = "plugin.plugins.moneta_fx.plugin:MonetaFxPlugin"' in text
-    assert 'version = "1.0.0"' in text
+    assert 'version = "1.0.1"' in text
 
 
 def test_plugin_toml_declares_ui_and_i18n():
