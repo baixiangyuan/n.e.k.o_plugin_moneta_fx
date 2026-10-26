@@ -196,11 +196,20 @@ export default function MonetaPanel(props: PluginSurfaceProps<PanelState>) {
 
   const bridge = props.api
 
+  // 调用一个插件 entry。
+  //
+  // props.actions 是宿主从 @ui.action 元数据收集的白名单，正常情况下里面
+  // 有全部动作。但白名单依赖宿主的收集链路（collect_entries → entry_map →
+  // _collect_ui_actions），中间任何一环没接上就会变成空数组——那时机就
+  // 会报"xxx 动作不可用"，而 entry 本身是好的。
+  //
+  // 所以这里不把"白名单里没有"当致命错误：仍然尝试 api.call，让宿主去
+  // 路由。真正不可用时宿主会返回 403/404，那才是可信的错误。
   const call = useCallback(
     async (id: string, args: Record<string, any> = {}) => {
       const target = action(id)
-      if (!target) throw new Error(`${id} 动作不可用`)
-      return bridge.call(target.entry_id || target.id, { session_key: sessionKey, ...args })
+      const entryId = target?.entry_id || target?.id || id
+      return bridge.call(entryId, { session_key: sessionKey, ...args })
     },
     [action, bridge, sessionKey],
   )
@@ -213,9 +222,16 @@ export default function MonetaPanel(props: PluginSurfaceProps<PanelState>) {
   }, [call, selected])
 
   const initial = useAsync(async () => {
-    const next = (await call("state", { symbol: selected })) as Snapshot
-    setSnapshot(next)
-    return next
+    // state 拿不到不能让整块面板废掉——@ui.context 已经提供了首帧的
+    // 行情与市场状态，先渲染出来，用户看到的是可用界面而不是错误页。
+    try {
+      const next = (await call("state", { symbol: selected })) as Snapshot
+      setSnapshot(next)
+      return next
+    } catch (error) {
+      console.warn("[moneta] state 首次加载失败，先用 context 数据渲染:", error)
+      return null
+    }
   }, [call, selected])
 
   useEffect(() => {
