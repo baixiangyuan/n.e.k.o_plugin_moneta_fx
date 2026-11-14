@@ -8,8 +8,12 @@ on:
       - "v*"
   workflow_dispatch:
 
+# 上游 plugin-market-release.yml 的 attest job 需要这两个权限：
+# 嵌套 job 的权限不能超过调用方，缺了会导致 workflow 直接 startup_failure。
 permissions:
   contents: write
+  id-token: write
+  attestations: write
 
 jobs:
   release:
