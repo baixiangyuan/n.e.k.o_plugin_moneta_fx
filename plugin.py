@@ -686,7 +686,11 @@ class MonetaFxPlugin(NekoPluginBase):
         },
         llm_result_fields=["market", "selected"],
     )
-    async def state(self, session_key: str = "default", symbol: str = "EUR/USD", **_):
+    async def account_snapshot(self, session_key: str = "default", symbol: str = "EUR/USD", **_):
+        # ⚠️ 方法名不能叫 state：SDK 基类在 __init__ 里执行
+        # ``self.state = PluginStatePersistence(...)``，实例属性会遮蔽同名方法，
+        # 宿主的 collect_entries 拿到的就是那个持久化对象而不是本入口，
+        # 面板调 api.call("state") 必然失败。entry id 仍然是 "state"。
         if self._cloud_enabled():
             try:
                 snapshot = await self._cloud_call(self._ensure_cloud().world_state, symbol)

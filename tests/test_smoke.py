@@ -314,6 +314,43 @@ def test_ui_action_metadata_is_complete():
                 break
 
 
+# NekoPluginBase.__init__ 里赋值的实例属性。实例属性会遮蔽同名方法，
+# 所以 entry 的方法名绝不能和它们重名——否则宿主 collect_entries 取到的
+# 是那个对象而不是入口，面板调用必然失败（"state 动作不可用"就是这么来的）。
+SDK_INSTANCE_ATTRS = {
+    "state",          # PluginStatePersistence
+    "plugins",        # Plugins(ctx)
+    "logger",
+    "ctx",
+    "bus",
+    "store",
+    "config",
+    "metadata",
+    "plugin_id",
+    "plugin_dir",
+    "storage_dir",
+    "system_info",
+}
+
+
+def test_entry_methods_do_not_shadow_sdk_instance_attributes():
+    """entry 的方法名不能和 SDK 的实例属性重名。"""
+
+    import inspect as _inspect
+
+    plugin = _make_plugin()
+    offenders = []
+    for name, class_value in _inspect.getmembers_static(type(plugin)):
+        target = class_value.__func__ if isinstance(class_value, (staticmethod, classmethod)) else class_value
+        meta = getattr(target, "__neko_entry__", None) if callable(target) else None
+        if isinstance(meta, dict) and name in SDK_INSTANCE_ATTRS:
+            offenders.append((name, meta.get("id")))
+
+    assert not offenders, (
+        "这些 entry 方法名和 SDK 实例属性重名，会被遮蔽：" + str(offenders)
+    )
+
+
 def test_default_developer_key_is_replaced_on_startup():
     """默认密钥等于公开值，必须被替换成随机值。
 
