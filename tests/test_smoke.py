@@ -33,7 +33,7 @@ def test_plugin_toml_declares_identity():
     assert 'id = "moneta_fx"' in text
     assert 'name = "MONETA FX · 外汇模拟交易室"' in text
     assert 'entry = "plugin.plugins.moneta_fx.plugin:MonetaFxPlugin"' in text
-    assert 'version = "1.0.5"' in text
+    assert 'version = "1.1.0"' in text
 
 
 def test_plugin_toml_declares_ui_and_i18n():
@@ -125,16 +125,17 @@ def test_config_schema_declares_every_moneta_key():
         assert not missing, f"{source} 的 [moneta] 有 schema 未声明的键: {sorted(missing)}"
 
 
-def test_plugin_toml_defaults_to_the_cloud_backend():
-    """清单里的 [moneta] 默认连云端，装上去就能用服务端账户。
+def test_plugin_toml_defaults_to_local_offline():
+    """清单默认必须是本地离线，不能连任何公网地址。
 
-    改成空 server_url 会让插件退回本地模式，用户看到的账户和浏览器端
-    不是同一份——这个默认值是有意为之。
+    云端模式走明文 HTTP，默认开启意味着每个安装者都会把注册/登录密码
+    发到作者的服务器上——这个决定必须由用户自己做，不能替他做。
+    想用云端就在插件配置页填 server_url 并打开 use_cloud。
     """
 
     moneta = tomllib.loads(read("plugin.toml"))["moneta"]
-    assert moneta["use_cloud"] is True, "默认应为云端模式"
-    assert moneta["server_url"].startswith("http"), "server_url 必须是完整地址"
+    assert moneta["use_cloud"] is False, "默认应为本地离线模式"
+    assert moneta["server_url"] == "", "默认不应连任何服务端"
 
 
 def test_sdk_range_contains_the_host_version():
@@ -162,7 +163,7 @@ class _Ctx:
     logger = None
 
 
-def _make_plugin():
+def _load_plugin_module():
     """按文件路径加载插件模块。
 
     不能写 ``from plugin import MonetaFxPlugin``——tests/conftest.py 装的
@@ -173,7 +174,11 @@ def _make_plugin():
     spec = importlib.util.spec_from_file_location("moneta_plugin_under_test", PLUGIN_ROOT / "plugin.py")
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
-    return module.MonetaFxPlugin(_Ctx())
+    return module
+
+
+def _make_plugin():
+    return _load_plugin_module().MonetaFxPlugin(_Ctx())
 
 
 def test_cloud_mode_startup_skips_local_runtime():
@@ -307,3 +312,38 @@ def test_ui_action_metadata_is_complete():
                 assert meta.get("group"), f"{name} 的 @ui.action 缺 group"
                 assert isinstance(meta.get("order"), int), f"{name} 的 @ui.action order 必须是整数"
                 break
+
+
+def test_default_developer_key_is_replaced_on_startup():
+    """默认密钥等于公开值，必须被替换成随机值。
+
+    ``moneta-dev-key`` 写在 plugin.toml 和 config.schema.json 里，任何人
+    都能看到；用它就能登录行情控制台、改价、调度资金。
+    """
+
+    module = _load_plugin_module()
+    DEFAULT_DEVELOPER_KEY = module.DEFAULT_DEVELOPER_KEY
+
+    plugin = module.MonetaFxPlugin(_Ctx())
+    settings = dict(plugin._moneta_settings)
+    assert settings["developer_key"] == DEFAULT_DEVELOPER_KEY  # 初始就是公开值
+
+    asyncio.run(plugin._ensure_developer_key(settings))
+
+    assert settings["developer_key"] != DEFAULT_DEVELOPER_KEY
+    assert len(settings["developer_key"]) >= 24
+    # 同时要写回实例，后续 developer_login 才用得上。
+    assert plugin._moneta_settings["developer_key"] == settings["developer_key"]
+
+
+def test_explicit_developer_key_is_respected():
+    """用户自己配了密钥就尊重用户的，不要覆盖。"""
+
+    plugin = _make_plugin()
+    settings = dict(plugin._moneta_settings)
+    settings["developer_key"] = "my-own-secret-key"
+
+    asyncio.run(plugin._ensure_developer_key(settings))
+
+    assert settings["developer_key"] == "my-own-secret-key"
+    assert plugin._moneta_settings["developer_key"] == "my-own-secret-key"

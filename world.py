@@ -7,8 +7,9 @@ Both front-ends drive this class:
 
 from __future__ import annotations
 
+import logging
 import threading
-from typing import Any, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional
 
 try:
     from . import auth as auth
@@ -197,8 +198,6 @@ class Session:
     def logout(self) -> None:
         self.user_id = None
         self.pending_trade = None
-        if self.world is not None:
-            self.world = self.world
 
 
 class MarketRuntime:
@@ -219,6 +218,9 @@ class MarketRuntime:
         self._dirty = True
         self._stop = threading.Event()
         self._thread: Optional[threading.Thread] = None
+        # 宿主注册的落盘回调。``persist()`` 只负责标记脏并转调它——
+        # 具体怎么写盘由宿主决定（插件是定时器，服务端是 save_state）。
+        self.on_persist: Optional[Callable[[], None]] = None
 
     # ── lifecycle ───────────────────────────────────────────────────────
     @property
@@ -250,10 +252,12 @@ class MarketRuntime:
         while not self._stop.is_set():
             try:
                 self.tick()
-            except Exception as error:  # pragma: no cover - defensive
+            except Exception:  # pragma: no cover - defensive
                 with self._lock:
                     self.world.paused = True
-                print(f"[moneta_fx] 市场时钟异常：{error}")
+                # 暂停市场比继续跑一个状态不确定的世界安全；日志走 logging，
+                # 不要用 print —— 插件进程里 stdout 未必有人看。
+                logging.getLogger("moneta_fx.market").exception("市场时钟异常，已暂停市场")
             self._stop.wait(self.tick_interval_ms / 1000.0)
 
     # ── clock ───────────────────────────────────────────────────────────
@@ -321,10 +325,24 @@ class MarketRuntime:
         return json.loads(json.dumps(self.world.to_dict(), ensure_ascii=False, default=str))
 
     def persist(self, force: bool = False) -> None:
+        """标记世界需要落盘，并通知宿主注册的 ``on_persist`` 回调。
+
+        这个类本身不写文件：插件的存储是异步 SDK（每 5 秒定时器落盘），
+        服务端是自己的 ``save_state()``。没有注册回调时只维护脏标志，
+        回调抛出的异常会被吞掉并记日志——存档失败不该打断交易。
+        """
+
         if not force and not self._dirty:
             return
         self._dirty = False
         self._last_persist_ms = auth.now_ms()
+        callback = self.on_persist
+        if callback is None:
+            return
+        try:
+            callback()
+        except Exception:  # pragma: no cover - defensive
+            logging.getLogger("moneta_fx.persist").exception("存档回调失败")
 
     # ── auth ────────────────────────────────────────────────────────────
     def login(self, username: str, password: str, address: str = "127.0.0.1") -> Dict[str, Any]:

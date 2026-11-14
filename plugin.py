@@ -8,6 +8,7 @@ a developer market-control console, and a Hosted TSX terminal.
 from __future__ import annotations
 
 import json
+import secrets
 from typing import Any, Dict, List, Optional
 
 from plugin.sdk.plugin import (
@@ -60,6 +61,7 @@ try:  # 作为插件包导入（plugin.plugins.moneta_fx）
     from .market import (
         symbol_name as symbol_name,
     )
+    from .store import STATE_KEY as STATE_KEY
     from .world import MarketRuntime as MarketRuntime
     from .world import Session as Session
 except ImportError:  # 平铺导入（本地测试、云端服务端）
@@ -99,6 +101,7 @@ except ImportError:  # 平铺导入（本地测试、云端服务端）
     from market import (
         symbol_name as symbol_name,
     )
+    from store import STATE_KEY as STATE_KEY  # type: ignore
     from world import MarketRuntime as MarketRuntime  # type: ignore
     from world import Session as Session
 
@@ -171,6 +174,63 @@ class MonetaFxPlugin(NekoPluginBase):
             self._cloud = CloudClient(str(self._moneta_settings["server_url"]).strip())
         return self._cloud
 
+    @staticmethod
+    async def _cloud_call(func, *args, **kwargs):
+        """把同步的 CloudClient 调用丢到线程里执行。
+
+        CloudClient 用的是 urllib，超时 15 秒。直接在 async 入口里调会
+        卡住插件事件循环——服务端慢一点，整个插件就停止响应。所有云端
+        调用都必须经过这里。
+        """
+
+        import asyncio
+
+        return await asyncio.to_thread(func, *args, **kwargs)
+
+    async def _ensure_developer_key(self, settings: Dict[str, Any]) -> None:
+        """开发者密钥不能停在公开的默认值上。
+
+        ``DEFAULT_DEVELOPER_KEY`` 写在 plugin.toml 和 config.schema.json
+        里，任何人都能看到。用它就能登录行情控制台、改价、调度资金。
+        首次启动时若仍是默认值（或为空），生成随机密钥并持久化到插件
+        store；用户显式配置过就尊重用户的。
+        """
+
+        current = str(settings.get("developer_key") or "").strip()
+        if current and current != DEFAULT_DEVELOPER_KEY:
+            self._moneta_settings["developer_key"] = current
+            return  # 用户自己设过，不动
+
+        try:
+            from plugin.sdk.plugin import unwrap_or
+        except Exception:  # pragma: no cover - 只可能在没有 SDK 的测试环境
+            unwrap_or = None  # type: ignore[assignment]
+
+        if unwrap_or is not None:
+            try:
+                saved = unwrap_or(await self.store.get(DEVELOPER_KEY_NAME), None)
+                if isinstance(saved, str) and saved.strip():
+                    settings["developer_key"] = saved.strip()
+                    self._moneta_settings["developer_key"] = saved.strip()
+                    self.logger.info("MONETA FX 沿用已生成的开发者密钥")
+                    return
+            except Exception:  # pragma: no cover - defensive
+                pass
+
+        generated = secrets.token_urlsafe(24)
+        settings["developer_key"] = generated
+        self._moneta_settings["developer_key"] = generated
+        if unwrap_or is not None:
+            try:
+                unwrap_or(await self.store.set(DEVELOPER_KEY_NAME, generated), None)
+            except Exception as error:  # pragma: no cover - defensive
+                self.logger.warning("MONETA FX 开发者密钥持久化失败：%s", error)
+        self.logger.warning(
+            "MONETA FX 已生成随机开发者密钥（默认值公开，不安全）：%s —— 请记下；"
+            "想自定义就在插件配置里设置 developer_key",
+            generated,
+        )
+
     # ── lifecycle ───────────────────────────────────────────────────────
     @lifecycle(id="startup")
     async def on_startup(self, **_):
@@ -180,6 +240,7 @@ class MonetaFxPlugin(NekoPluginBase):
             self._moneta_settings.get("server_url"),
         )
         settings = await self._load_settings()
+        await self._ensure_developer_key(settings)
         self.logger.info(
             "MONETA FX 配置已加载：use_cloud=%s server_url=%r",
             self._moneta_settings.get("use_cloud"),
@@ -187,7 +248,7 @@ class MonetaFxPlugin(NekoPluginBase):
         )
         if self._cloud_enabled():
             client = self._ensure_cloud()
-            if not client.ping():
+            if not await self._cloud_call(client.ping):
                 self.logger.warning(
                     "MONETA FX 云端后端无响应（%s），本次启动回退到本地模式",
                     self._moneta_settings.get("server_url"),
@@ -254,7 +315,7 @@ class MonetaFxPlugin(NekoPluginBase):
         try:
             from plugin.sdk.plugin import unwrap_or
 
-            raw = unwrap_or(await self.store.get("world"), None)
+            raw = unwrap_or(await self.store.get(STATE_KEY), None)
         except Exception:  # pragma: no cover - defensive
             return None
         if isinstance(raw, str):
@@ -272,7 +333,7 @@ class MonetaFxPlugin(NekoPluginBase):
         try:
             from plugin.sdk.plugin import unwrap_or
 
-            unwrap_or(await self.store.set("world", state), None)
+            unwrap_or(await self.store.set(STATE_KEY, state), None)
         except Exception as error:  # pragma: no cover - defensive
             self.logger.warning("MONETA FX 存档写入失败：%s", error)
 
@@ -364,7 +425,7 @@ class MonetaFxPlugin(NekoPluginBase):
         if mode == "cloud":
             client = self._ensure_cloud()
             try:
-                state = client.world_state()
+                state = await self._cloud_call(client.world_state)
             except RemoteError:
                 # 云端暂时不可用，退回本地视图（本地 runtime 可能没启动）。
                 state = {}
@@ -380,7 +441,8 @@ class MonetaFxPlugin(NekoPluginBase):
                 for start in range(0, len(WATCHLIST), 12):
                     batch = WATCHLIST[start:start + 12]
                     try:
-                        quotes.update(client.quotes(batch).get("quotes") or {})
+                        batch_result = await self._cloud_call(client.quotes, batch)
+                        quotes.update(batch_result.get("quotes") or {})
                     except RemoteError:
                         break
             return {
@@ -443,7 +505,7 @@ class MonetaFxPlugin(NekoPluginBase):
     async def login(self, username: str, password: str, session_key: str = "default", **_):
         if self._cloud_enabled():
             try:
-                result = self._ensure_cloud().login(username, password)
+                result = await self._cloud_call(self._ensure_cloud().login, username, password)
                 self._bind(session_key, result.get("user", {}).get("id"))
                 return Ok({"message": f"已登录 · {result['user']['username']}", "user": result["user"], "mode": "cloud"})
             except RemoteError as error:
@@ -483,7 +545,7 @@ class MonetaFxPlugin(NekoPluginBase):
     async def register(self, username: str, password: str, session_key: str = "default", **_):
         if self._cloud_enabled():
             try:
-                result = self._ensure_cloud().register(username, password)
+                result = await self._cloud_call(self._ensure_cloud().register, username, password)
                 self._bind(session_key, result.get("user", {}).get("id"))
                 return Ok({"message": f"账户已创建 · {result['user']['username']}", "user": result["user"], "mode": "cloud"})
             except RemoteError as error:
@@ -522,7 +584,7 @@ class MonetaFxPlugin(NekoPluginBase):
     async def developer_login(self, key: str, session_key: str = "default", **_):
         if self._cloud_enabled():
             try:
-                result = self._ensure_cloud().developer_login(key)
+                result = await self._cloud_call(self._ensure_cloud().developer_login, key)
                 self._bind(session_key, result.get("user", {}).get("id"))
                 return Ok({"message": "开发者已登录", "user": result["user"], "mode": "cloud"})
             except RemoteError as error:
@@ -558,7 +620,7 @@ class MonetaFxPlugin(NekoPluginBase):
         session = self._sessions.get(session_key)
         if self._cloud_enabled():
             try:
-                self._ensure_cloud().logout()
+                await self._cloud_call(self._ensure_cloud().logout)
             except RemoteError:
                 pass
             if session:
@@ -592,7 +654,7 @@ class MonetaFxPlugin(NekoPluginBase):
     async def session(self, session_key: str = "default", **_):
         if self._cloud_enabled():
             try:
-                result = self._ensure_cloud().session()
+                result = await self._cloud_call(self._ensure_cloud().session)
                 return Ok({"user": result.get("user"), "mode": "cloud"})
             except RemoteError as error:
                 return Err(SdkError(str(error)))
@@ -627,7 +689,7 @@ class MonetaFxPlugin(NekoPluginBase):
     async def state(self, session_key: str = "default", symbol: str = "EUR/USD", **_):
         if self._cloud_enabled():
             try:
-                snapshot = self._ensure_cloud().world_state(symbol)
+                snapshot = await self._cloud_call(self._ensure_cloud().world_state, symbol)
                 snapshot["selected"] = symbol
                 snapshot["mode"] = "cloud"
                 return Ok(snapshot)
@@ -673,7 +735,7 @@ class MonetaFxPlugin(NekoPluginBase):
             wanted = wanted[:12]
         if self._cloud_enabled():
             try:
-                result = self._ensure_cloud().quotes(wanted)
+                result = await self._cloud_call(self._ensure_cloud().quotes, wanted)
                 result["mode"] = "cloud"
                 return Ok(result)
             except RemoteError as error:
@@ -741,7 +803,9 @@ class MonetaFxPlugin(NekoPluginBase):
         order = {"symbol": symbol, "side": side, "type": type, "lots": lots, "price": price, "sl": sl, "tp": tp}
         if self._cloud_enabled():
             try:
-                snapshot = self._ensure_cloud().trade("order", {"order": order, "requestId": _request_id()})
+                snapshot = await self._cloud_call(
+                    self._ensure_cloud().trade, "order", {"order": order, "requestId": _request_id()}
+                )
                 return Ok({"message": f"{'买入' if side == 'buy' else '卖出'} {symbol} {lots:.2f} 手",
                            "account": snapshot.get("book", {}).get("account"), "mode": "cloud"})
             except RemoteError as error:
@@ -791,7 +855,7 @@ class MonetaFxPlugin(NekoPluginBase):
                 payload = {"id": id, "requestId": _request_id()}
                 if lots is not None:
                     payload["lots"] = lots
-                snapshot = self._ensure_cloud().trade("close", payload)
+                snapshot = await self._cloud_call(self._ensure_cloud().trade, "close", payload)
                 return Ok({"message": "已平仓", "account": snapshot.get("book", {}).get("account"), "mode": "cloud"})
             except RemoteError as error:
                 return Err(SdkError(str(error)))
@@ -829,7 +893,9 @@ class MonetaFxPlugin(NekoPluginBase):
     async def close_all(self, session_key: str = "default", **_):
         if self._cloud_enabled():
             try:
-                snapshot = self._ensure_cloud().trade("closeAll", {"requestId": _request_id()})
+                snapshot = await self._cloud_call(
+                    self._ensure_cloud().trade, "closeAll", {"requestId": _request_id()}
+                )
                 return Ok({"message": "已全部平仓", "account": snapshot.get("book", {}).get("account"), "mode": "cloud"})
             except RemoteError as error:
                 return Err(SdkError(str(error)))
@@ -870,7 +936,11 @@ class MonetaFxPlugin(NekoPluginBase):
     async def modify(self, id: str, sl: Optional[float] = None, tp: Optional[float] = None, session_key: str = "default", **_):
         if self._cloud_enabled():
             try:
-                snapshot = self._ensure_cloud().trade("modify", {"id": id, "sl": sl, "tp": tp, "requestId": _request_id()})
+                snapshot = await self._cloud_call(
+                    self._ensure_cloud().trade,
+                    "modify",
+                    {"id": id, "sl": sl, "tp": tp, "requestId": _request_id()},
+                )
                 return Ok({"message": "止损止盈已更新", "account": snapshot.get("book", {}).get("account"), "mode": "cloud"})
             except RemoteError as error:
                 return Err(SdkError(str(error)))
@@ -906,7 +976,9 @@ class MonetaFxPlugin(NekoPluginBase):
     async def cancel(self, id: str, session_key: str = "default", **_):
         if self._cloud_enabled():
             try:
-                snapshot = self._ensure_cloud().trade("cancel", {"id": id, "requestId": _request_id()})
+                snapshot = await self._cloud_call(
+                    self._ensure_cloud().trade, "cancel", {"id": id, "requestId": _request_id()}
+                )
                 return Ok({"message": "已撤销挂单", "account": snapshot.get("book", {}).get("account"), "mode": "cloud"})
             except RemoteError as error:
                 return Err(SdkError(str(error)))
@@ -955,7 +1027,7 @@ class MonetaFxPlugin(NekoPluginBase):
         if self._cloud_enabled():
             # 服务端没有独立的预估接口，用 /api/world/state 里的账户与报价本地估算。
             try:
-                state = self._ensure_cloud().world_state(symbol)
+                state = await self._cloud_call(self._ensure_cloud().world_state, symbol)
                 book = state.get("book") or {}
                 account = book.get("account")
                 if not account:
@@ -1013,7 +1085,7 @@ class MonetaFxPlugin(NekoPluginBase):
         body.update({k: v for k, v in kwargs.items() if v is not None})
         if self._cloud_enabled():
             try:
-                self._ensure_cloud().control(body)
+                await self._cloud_call(self._ensure_cloud().control, body)
                 return Ok({"message": "行情控制已生效", "mode": "cloud"})
             except RemoteError as error:
                 return Err(SdkError(str(error)))
@@ -1057,11 +1129,11 @@ class MonetaFxPlugin(NekoPluginBase):
             try:
                 client = self._ensure_cloud()
                 if view == "account":
-                    result = client.admin_account(accountId, limit=limit)
+                    result = await self._cloud_call(client.admin_account, accountId, limit=limit)
                 elif view == "ledger":
-                    result = client.admin_ledger(limit=limit)
+                    result = await self._cloud_call(client.admin_ledger, limit=limit)
                 else:
-                    result = client.admin_accounts()
+                    result = await self._cloud_call(client.admin_accounts)
                 result["mode"] = "cloud"
                 return Ok(result)
             except RemoteError as error:
@@ -1115,7 +1187,7 @@ class MonetaFxPlugin(NekoPluginBase):
                 body = {"requestId": requestId, "kind": kind, "accountId": accountId, "amount": amount, "reason": reason}
                 if destinationId:
                     body["destinationId"] = destinationId
-                result = self._ensure_cloud().funding(body)
+                result = await self._cloud_call(self._ensure_cloud().funding, body)
                 return Ok({"message": "资金调度已执行", "entry": result.get("entry"), "duplicate": result.get("duplicate"), "mode": "cloud"})
             except RemoteError as error:
                 return Err(SdkError(str(error)))
@@ -1155,7 +1227,7 @@ class MonetaFxPlugin(NekoPluginBase):
     async def report(self, session_key: str = "default", **_):
         if self._cloud_enabled():
             try:
-                state = self._ensure_cloud().world_state()
+                state = await self._cloud_call(self._ensure_cloud().world_state)
                 account = (state.get("book") or {}).get("account")
                 if not account:
                     return Err(SdkError("请先登录虚构市场账户"))
@@ -1205,7 +1277,7 @@ class MonetaFxPlugin(NekoPluginBase):
         if self._cloud_enabled():
             # 服务端未开放参数修改接口，云端模式只读。
             try:
-                state = self._ensure_cloud().world_state()
+                state = await self._cloud_call(self._ensure_cloud().world_state)
                 account = (state.get("book") or {}).get("account")
                 if not account:
                     return Err(SdkError("请先登录虚构市场账户"))

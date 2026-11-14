@@ -1,44 +1,38 @@
-# MONETA FX · N.E.K.O. 插件 + 独立云端服务端
+# MONETA FX · N.E.K.O. 插件
 
-把 `MONETA-FX-2026-10-10T14-37-19-962Z`（虚构外汇模拟交易室）整体移植成两套可独立运行的产物，共用同一个 Python 交易引擎：
-
-| 产物 | 位置 | 用途 |
-| --- | --- | --- |
-| N.E.K.O. 插件 | `moneta_fx/` | 在插件管理器里运行的交易终端（Hosted TSX 面板） |
-| 独立云端服务端 | `server/` | 原版 UI 1:1 + Python 后端，可部署到任意云主机 |
+虚构外汇模拟交易室，做成一个 N.E.K.O. `plugin` 包：共享虚构市场、市价/限价/突破单、
+止损止盈、保证金与强平、隔夜费、K 线图与账户分析，外加开发者行情控制台。
 
 > 全部行情、资金与成交均为虚构游戏数据，不对应任何真实市场，不构成投资建议。
+
+配套的独立服务端在另一个仓库
+[`moneta-fx-server`](https://github.com/baixiangyuan/moneta-fx-server)：
+原版网页 UI 1:1 + FastAPI 后端，插件可选择连它来共享同一套账户。
 
 ---
 
 ## 一、目录结构
 
+本仓库根目录**就是插件目录**（仓库名 `n.e.k.o_plugin_moneta_fx`，目录名与插件 ID 一致）：
+
 ```text
-neko-moneta-fx/
-├── moneta_fx/                 ← N.E.K.O. 插件源码（目录名必须等于插件 ID）
-│   ├── plugin.toml            ← 清单：id / name / entry / UI / i18n / 运行时
-│   ├── __init__.py             ← 惰性导出 MonetaFxPlugin（裸 import 不拉 SDK）
-│   ├── plugin.py               ← 插件类：生命周期、入口、@ui.context
-│   ├── market.py               ← 虚构市场模型（移植自 public/js/market.js）
-│   ├── engine.py               ← 交易引擎：下单/保证金/隔夜/强平（移植自 engine.js）
-│   ├── store.py                ← 共享市场存档结构与校验（移植自 store.js）
-│   ├── auth.py                 ← 会话、口令散列、登录限流
-│   ├── world.py                ← 共享运行时：行情、账户、管理、资金调度
-│   ├── ui/panel.tsx            ← Hosted TSX 交易终端
-│   ├── docs/quickstart.md      ← 使用指南
-│   ├── i18n/{zh-CN,en}.json    ← 插件文案
-│   └── config.schema.json      ← 通用配置页表单
-├── server/                     ← 独立云端服务端
-│   ├── app.py                  ← FastAPI 应用（原版 API 契约）
-│   └── static/                 ← 原版 UI 1:1（index.html / styles.css / js/*）
-├── scripts/
-│   ├── patch_ui.py             ← 把原版 UI 的真实行情文案改为服务端共享行情
-│   ├── e2e_cloud.py            ← 云端端到端测试（35 项）
-│   └── debug_*.py              ← 定位用脚本
-├── tests/
-│   └── stub_plugin_sdk.py      ← 本地测试用 SDK stub（不随插件发布）
-├── smoke_test.py               ← 引擎单元冒烟测试（41 项）
-└── data/                       ← 云端运行时生成的共享市场存档
+n.e.k.o_plugin_moneta_fx/
+├── plugin.toml            ← 清单：id / name / entry / UI / i18n / 运行时
+├── __init__.py            ← 惰性导出 MonetaFxPlugin（裸 import 不拉 SDK）
+├── plugin.py              ← 插件类：生命周期、入口、@ui.action、@ui.context
+├── cloud.py               ← 云端后端 HTTP 客户端（可选，仅标准库）
+├── market.py              ← 虚构市场模型
+├── engine.py              ← 交易引擎：下单/保证金/隔夜/强平
+├── store.py               ← 共享市场存档结构与校验
+├── auth.py                ← 会话、口令散列、登录限流
+├── world.py               ← 共享运行时：行情、账户、管理、资金调度
+├── ui/panel.tsx           ← Hosted TSX 交易终端
+├── docs/quickstart.md     ← 使用指南
+├── i18n/{zh-CN,en}.json   ← 插件文案
+├── config.schema.json     ← 通用配置页表单
+├── config.example.toml    ← 运行配置模板
+├── tests/                 ← 单元测试（78 项）+ 本地 SDK stub
+└── .github/workflows/     ← 插件市场 verify / release
 ```
 
 ---
@@ -97,54 +91,24 @@ npm run check-hosted-tsx -- plugin/plugins/moneta_fx
 
 ---
 
-## 三、独立云端服务端（原版 UI 1:1）
+## 三、云端服务端（另一个仓库）
 
-```bash
-cd C:\Users\ADMIN\Downloads\neko-moneta-fx
-uv run --with fastapi --with "uvicorn[standard]" --with pydantic \
-  python server/app.py
+服务端不在本仓库，在
+[`baixiangyuan/moneta-fx-server`](https://github.com/baixiangyuan/moneta-fx-server)。
+那里有原版网页 UI 1:1、FastAPI 后端、Docker 与一键部署脚本。插件只是可选的
+客户端——不装服务端也能完全离线玩。
+
+部署好之后，把地址填进插件配置：
+
+```toml
+[moneta]
+server_url = "http://your-server:4173"
+use_cloud = true
 ```
 
-或固定依赖后直接用 uvicorn：
-
-```bash
-uv venv
-uv pip install fastapi "uvicorn[standard]" pydantic
-uv run uvicorn server.app:app --host 0.0.0.0 --port 4173
-```
-
-Windows 上一键启动：双击 `start-server.cmd`。
-
-打开 `http://<服务器IP>:4173/` 就是原版交易室界面。
-
-### 环境变量
-
-| 变量 | 默认 | 说明 |
-| --- | --- | --- |
-| `MONETA_HOST` | `0.0.0.0` | 监听地址 |
-| `MONETA_PORT` | `4173` | 监听端口 |
-| `MONETA_DATA_DIR` | `./server/data` | 共享市场存档目录 |
-| `MONETA_DEVELOPER_KEY` | `moneta-dev-key` | 开发者密钥 |
-| `MONETA_ADMIN_PASSWORD` | 空 | 管理员面板口令；未设置时只允许本机访问 |
-| `MONETA_PUBLIC_DOMAIN` | 空 | 对外域名，用于识别隧道转发请求 |
-| `MONETA_INITIAL_BALANCE` | `100000` | 新账户初始资金 |
-| `MONETA_TICK_MS` | `250` | 市场心跳间隔 |
-| `MONETA_PERSIST_MS` | `5000` | 自动存档间隔 |
-
-### 对外暴露（类比原版的域名服务）
-
-原版用 `cloudflared` 把本地服务暴露到公网。移植版保留同一套思路，只是隧道工具需要自行准备：
-
-```bash
-# 示例：任选一种
-cloudflared tunnel --url http://127.0.0.1:4173
-# 或
-ngrok http 4173
-# 或直接在有公网 IP 的主机上运行，并设置
-export MONETA_PUBLIC_DOMAIN=your.domain
-```
-
-服务端检测到 `Host` 等于 `MONETA_PUBLIC_DOMAIN`、来源是回环、带 `X-Forwarded-Proto: https` 和合法 `CF-Connecting-IP` 时，按隧道转发请求处理，Cookie 会加 `Secure`。
+> ⚠️ 服务端目前是**明文 HTTP**。如果部署在公网，注册和登录的密码会以明文
+> 传输，中间链路上的任何人都能截获。请只在不信任度可控的网络里用，
+> 或者自己加一层 HTTPS 反向代理（Caddy 三行配置即可自动签证书）。
 
 ---
 
@@ -189,18 +153,16 @@ export MONETA_PUBLIC_DOMAIN=your.domain
 ## 七、测试
 
 ```bash
-# 插件单元测试（70 项，含云端客户端，无需 N.E.K.O. 环境）
-uv run --python 3.12 --with pytest python -m pytest -c pytest.ini -q
-
-# 引擎冒烟测试（41 项）
-uv run --python 3.12 python smoke_test.py
-
-# 云端服务端端到端测试（35 项，需要服务端已启动）
-uv run --python 3.12 python scripts/e2e_cloud.py
+# 全部单元测试（79 项，无需 N.E.K.O. 环境）
+uv run --python 3.12 --with pytest --with packaging python -m pytest -c pytest.ini -q
 ```
 
-当前状态：插件单元测试 70/70 通过，引擎冒烟 41/41 通过，云端 E2E 35/35 通过，
-官方 `check-hosted-tsx` 通过，插件市场 verify + release workflow 全绿。
+覆盖引擎（下单/保证金/止盈止损/强平/幂等）、共享运行时（账户/行情控制/资金调度/
+存档/停机补绘）、云端客户端（URL 拼装、cookie、错误透传，用假 urlopen 不打真网络）、
+以及清单/配置/schema/UI 动作声明的一致性检查。
+
+CI 侧除了跑 manifest 与 Hosted TSX 校验，还会执行插件市场的 verify 与 release
+两个 workflow。
 
 ---
 
@@ -219,7 +181,12 @@ uv run --python 3.12 python scripts/e2e_cloud.py
 
 ## 九、安全提醒
 
-- `developer_key` 与 `MONETA_ADMIN_PASSWORD` 必须在部署前修改。
-- 服务端默认绑定 `0.0.0.0`，请配合防火墙或反向代理限制访问。
+- **开发者密钥**：清单里的 `developer_key = "moneta-dev-key"` 是公开的示例值。
+  首次启动时如果还是这个值，插件会自动生成随机密钥并持久化，密钥会打进日志——
+  请记下。想自己定就在插件配置里设置 `developer_key`。
+- **云端模式走明文 HTTP**：注册和登录的密码在网络上可被截获。公网部署请自行加
+  HTTPS 反向代理，或只在可信网络里用。
+- **服务端的 `MONETA_ADMIN_PASSWORD` 与 `MONETA_DEVELOPER_KEY`** 在部署前必须改，
+  见 `moneta-fx-server` 仓库的部署脚本。
 - 登录接口有每地址 15 次 / 10 分钟的限制；口令使用 scrypt 散列，不落明文。
 - 全部数据都是模拟数据，但仍建议不要把服务端直接暴露在公网而不加认证。

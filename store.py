@@ -14,7 +14,9 @@ except ImportError:  # 平铺导入（本地测试、云端服务端）
     from engine import TradeError, create_account, validate_account  # type: ignore
     from market import Market, bootstrap_market, resume_market  # type: ignore
 
-STATE_KEY = "moneta_fx.world.v1"
+# 插件 store 里存整个世界快照用的键。实际值保持 "world"——早期版本就是这个
+# 键，改名会让已安装用户的存档读不到。
+STATE_KEY = "world"
 STATE_VERSION = 1
 SPEED_CHOICES = (1, 5, 20, 100)
 

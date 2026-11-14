@@ -15,7 +15,9 @@
 from __future__ import annotations
 
 import json
+import threading
 import urllib.error
+import urllib.parse
 import urllib.request
 from typing import Any, Dict, Optional
 
@@ -25,12 +27,21 @@ class RemoteError(Exception):
 
 
 class CloudClient:
-    """MONETA FX 云端服务端的极简 HTTP 客户端（仅标准库）。"""
+    """MONETA FX 云端服务端的极简 HTTP 客户端（仅标准库）。
+
+    请求是同步阻塞的（urllib）。插件在 async 入口里调用时，必须用
+    ``asyncio.to_thread`` 包一层，否则会卡住插件事件循环——见
+    ``plugin.py`` 的 ``_cloud_call``。
+
+    cookie 是跨请求共享的可变状态，多线程并发时需要串行化，因此
+    ``_request`` 内部持锁。
+    """
 
     def __init__(self, base_url: str, timeout: float = 15.0) -> None:
         self.base_url = base_url.rstrip("/")
         self.timeout = timeout
         self.cookie: Optional[str] = None
+        self._lock = threading.Lock()
 
     # ── 底层请求 ───────────────────────────────────────────────────────
     def _request(
@@ -46,15 +57,18 @@ class CloudClient:
         request.add_header("Accept", "application/json")
         # 服务端的 CSRF 防护要求这个头，缺了会被判为跨站请求。
         request.add_header("X-Moneta-Request", "1")
-        if self.cookie:
-            request.add_header("Cookie", self.cookie)
+        # 读 cookie 也要在锁内：另一个线程可能正在 Set-Cookie。
+        with self._lock:
+            if self.cookie:
+                request.add_header("Cookie", self.cookie)
         try:
             with urllib.request.urlopen(request, timeout=self.timeout) as response:
                 raw = response.read()
                 set_cookie = response.headers.get("Set-Cookie")
                 if set_cookie:
                     # 只保留 name=value 部分，丢掉 Path/HttpOnly 等属性。
-                    self.cookie = set_cookie.split(";", 1)[0]
+                    with self._lock:
+                        self.cookie = set_cookie.split(";", 1)[0]
                 return json.loads(raw) if raw else {}
         except urllib.error.HTTPError as error:
             raw = error.read()
@@ -93,7 +107,8 @@ class CloudClient:
         """批量报价。服务端返回 list，这里归一成 ``{symbol: quote}`` dict，
         与本地模式的形状保持一致。"""
 
-        query = ",".join(symbols)
+        # 货币对里有 "/"（EUR/USD），必须编码，否则会被当成路径分隔符。
+        query = urllib.parse.quote(",".join(symbols), safe=",")
         payload = self._request("GET", f"/api/quotes?symbols={query}")
         items = payload.get("quotes") if isinstance(payload, dict) else payload
         normalised: Dict[str, Any] = {}
@@ -108,11 +123,11 @@ class CloudClient:
         return result
 
     def history(self, symbol: str) -> Dict[str, Any]:
-        return self._request("GET", f"/api/history?symbol={symbol}")
+        return self._request("GET", f"/api/history?symbol={urllib.parse.quote(symbol, safe='')}")
 
     # ── 交易 ───────────────────────────────────────────────────────────
     def world_state(self, symbol: str = "EUR/USD") -> Dict[str, Any]:
-        return self._request("GET", f"/api/world/state?symbol={symbol}")
+        return self._request("GET", f"/api/world/state?symbol={urllib.parse.quote(symbol, safe='')}")
 
     def trade(self, action: str, payload: Dict[str, Any]) -> Dict[str, Any]:
         body = {"action": action}
@@ -130,7 +145,9 @@ class CloudClient:
         return self._request("GET", "/api/admin/accounts")
 
     def admin_account(self, account_id: str, limit: int = 100) -> Dict[str, Any]:
-        return self._request("GET", f"/api/admin/account?id={account_id}&limit={limit}")
+        return self._request(
+            "GET", f"/api/admin/account?id={urllib.parse.quote(account_id, safe='')}&limit={int(limit)}"
+        )
 
     def admin_ledger(self, limit: int = 20) -> Dict[str, Any]:
         return self._request("GET", f"/api/admin/ledger?limit={limit}")

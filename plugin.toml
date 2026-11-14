@@ -5,7 +5,7 @@ type = "plugin"
 description = "完整移植 MONETA FX 虚构外汇交易室：共享虚构市场、市价/限价/突破单、止损止盈、保证金与强平、隔夜费结算、K 线图与账户分析。行情控制台仅供插件管理员使用。"
 short_description = "MONETA FX fictional forex paper-trading room: shared market, orders, margin, chart and analytics."
 keywords = ["外汇", "交易", "MONETA", "forex", "trading", "模拟", "paper trading", "K线"]
-version = "1.0.5"
+version = "1.1.0"
 entry = "plugin.plugins.moneta_fx.plugin:MonetaFxPlugin"
 
 [plugin.author]
@@ -51,7 +51,8 @@ initial_balance = 100000.0
 tick_interval_ms = 500
 persist_interval_ms = 5000
 developer_key = "moneta-dev-key"
-# 云端后端：默认连到已部署的服务端。想用本地离线模式就把 server_url 改成 ""
-# 并把 use_cloud 改成 false（在插件管理器的配置页改，别改这个文件）。
-server_url = "http://8.152.0.186:4173"
-use_cloud = true
+# 默认本地离线：行情在插件进程里生成，存档写进插件 store，完全不联网。
+# 想和浏览器端共用同一个世界，就在插件管理器的配置页填 server_url 并开启
+# use_cloud —— 面板顶部会有引导条，点一下就能进配置。
+server_url = ""
+use_cloud = false

@@ -130,6 +130,8 @@ type PanelState = {
   quotes: Record<string, Quote>
   initialBalance: number
   version: string
+  /** "local" = 插件进程内离线；"cloud" = 转发到自建服务端。 */
+  mode?: "local" | "cloud"
 }
 
 type TabId = "terminal" | "positions" | "pending" | "history" | "report" | "journal"
@@ -185,6 +187,7 @@ export default function MonetaPanel(props: PluginSurfaceProps<PanelState>) {
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [report, setReport] = useState<any>(null)
   const [busy, setBusy] = useState(false)
+  const [cloudHintDismissed, setCloudHintDismissed] = useLocalState("moneta.cloudHintDismissed", false)
 
   const canvasRef = useRef<any>({ current: null })
   const chartRef = useRef<Chart | null>(null)
@@ -561,6 +564,26 @@ export default function MonetaPanel(props: PluginSurfaceProps<PanelState>) {
           <RefreshButton label={t("actions.refresh.label")} onRefresh={() => load()} />
         </ToolbarGroup>
       </Toolbar>
+
+      {state.mode !== "cloud" && !cloudHintDismissed && (
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "10px",
+            padding: "8px 12px",
+            margin: "4px 0 8px",
+            borderRadius: "8px",
+            background: "rgba(255,193,7,0.12)",
+            border: "1px solid rgba(255,193,7,0.35)",
+            fontSize: "12px",
+            lineHeight: "1.55",
+          }}
+        >
+          <span style={{ flex: "1" }}>{t("panel.cloudHint.text")}</span>
+          <Button onClick={() => { setCloudHintDismissed(true) }}>{t("panel.cloudHint.dismiss")}</Button>
+        </div>
+      )}
 
       <Tabs
         id="moneta-tabs"

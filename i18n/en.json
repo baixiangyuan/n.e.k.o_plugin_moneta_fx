@@ -197,5 +197,7 @@
   "actions.admin.label": "Read accounts",
   "actions.fund.label": "Run funding",
   "actions.report.label": "Build analytics",
-  "actions.settings.label": "Save rules"
+  "actions.settings.label": "Save rules",
+  "panel.cloudHint.text": "Local offline mode: accounts and quotes live only in this machine and are not shared with the web UI. To share one world with the browser, set server_url and enable use_cloud in the plugin settings.",
+  "panel.cloudHint.dismiss": "Got it"
 }

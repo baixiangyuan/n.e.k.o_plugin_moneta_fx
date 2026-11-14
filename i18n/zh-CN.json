@@ -197,5 +197,7 @@
   "actions.admin.label": "读取账户",
   "actions.fund.label": "执行资金调度",
   "actions.report.label": "生成分析",
-  "actions.settings.label": "保存参数"
+  "actions.settings.label": "保存参数",
+  "panel.cloudHint.text": "本地离线模式：账户和行情只存在这台机器上，和网页端不互通。想和浏览器共用同一套账户与持仓，请在插件设置里填入 server_url 并开启 use_cloud。",
+  "panel.cloudHint.dismiss": "知道了"
 }

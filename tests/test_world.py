@@ -304,3 +304,30 @@ def test_reference_lists_every_symbol(runtime):
     reference = runtime.reference()
     assert reference["count"] == len(OFFLINE_SYMBOLS)
     assert "EUR/USD" in reference["symbols"]
+
+
+def test_persist_notifies_registered_callback(runtime):
+    """persist() 只负责标记脏 + 转调宿主回调，落盘由宿主实现。"""
+
+    calls = []
+    runtime.on_persist = lambda: calls.append("saved")
+    runtime.persist(force=True)
+    assert calls == ["saved"]
+
+
+def test_persist_skips_when_clean(runtime):
+    runtime.persist(force=True)  # 清掉脏标志
+    calls = []
+    runtime.on_persist = lambda: calls.append("saved")
+    runtime.persist()  # 不强制且不脏，不应触发
+    assert calls == []
+
+
+def test_persist_swallows_callback_errors(runtime):
+    """存档失败不能把交易打断。"""
+
+    def boom() -> None:
+        raise RuntimeError("磁盘满了")
+
+    runtime.on_persist = boom
+    runtime.persist(force=True)  # 不应抛出

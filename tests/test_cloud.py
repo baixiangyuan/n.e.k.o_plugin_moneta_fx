@@ -88,13 +88,15 @@ def test_set_cookie_is_captured_and_replayed(calls):
     assert len(recorded) == 2
 
 
-def test_quotes_joins_symbols(calls):
+def test_quotes_joins_and_encodes_symbols(calls):
+    """货币对里的 "/" 必须百分号编码，逗号作为分隔符保留。"""
+
     recorded, state = calls
     state["response"] = {"quotes": {}}
     client = CloudClient("http://host:4173")
     client.quotes(["EUR/USD", "GBP/USD"])
     _, url, _ = recorded[0]
-    assert url == "http://host:4173/api/quotes?symbols=EUR/USD,GBP/USD"
+    assert url == "http://host:4173/api/quotes?symbols=EUR%2FUSD,GBP%2FUSD"
 
 
 def test_trade_wraps_action_and_payload(calls):
